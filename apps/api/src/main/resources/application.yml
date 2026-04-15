@@ -1,0 +1,91 @@
+spring:
+  application:
+    name: aplus-cafe-api
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/aplus_cafe
+    username: postgres
+    password: postgres
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+  # Email Configuration
+  # Option 1 - Mailtrap (for development/testing): https://mailtrap.io
+  #   host: sandbox.smtp.mailtrap.io, port: 2525
+  # Option 2 - Gmail: Enable 2FA, create App Password at https://myaccount.google.com/apppasswords
+  #   host: smtp.gmail.com, port: 587
+  mail:
+    host: ${MAIL_HOST:sandbox.smtp.mailtrap.io}
+    port: ${MAIL_PORT:2525}
+    username: ${MAIL_USERNAME:} 
+    password: ${MAIL_PASSWORD:}
+    from: ${MAIL_FROM:noreply@aplus.cafe}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
+
+server:
+  port: 8080
+
+# Actuator endpoints for health checks
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: when-authorized
+
+# JWT Configuration
+application:
+  security:
+    jwt:
+      secret-key: ${JWT_SECRET_KEY}
+      expiration: 86400000 # 24 hours in milliseconds
+      refresh-token:
+        expiration: 604800000 # 7 days in milliseconds
+
+# Stripe Configuration
+stripe:
+  secret-key: ${STRIPE_SECRET_KEY}
+  webhook-secret: ${STRIPE_WEBHOOK_SECRET}
+
+# App Configuration
+app:
+  frontend-url: ${FRONTEND_URL:http://localhost:5173}
+
+# Logging - Clean output, only status messages
+logging:
+  level:
+    root: WARN
+    com.apluscafe: INFO
+    com.apluscafe.service: INFO
+    com.apluscafe.controller: INFO
+    org.springframework.security: WARN
+    org.springframework.web: WARN
+    org.hibernate.SQL: WARN
+    org.hibernate.type: WARN
+  pattern:
+    console: "%d{HH:mm:ss} %-5level %logger{20} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} %-5level %logger{36} - %msg%n"
+  file:
+    name: logs/aplus-cafe-api.log
+  logback:
+    rollingpolicy:
+      max-file-size: 10MB
+      max-history: 30

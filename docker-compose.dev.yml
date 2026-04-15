@@ -1,0 +1,28 @@
+version: '3.8'
+
+# Development overrides - use with: docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
+
+services:
+  db:
+    ports:
+      - "5432:5432"
+
+  api:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+      SPRING_JPA_SHOW_SQL: "true"
+      LOGGING_LEVEL_COM_APLUSCAFE: DEBUG
+      LOGGING_LEVEL_ORG_HIBERNATE_SQL: DEBUG
+    volumes:
+      - ./apps/api/src:/app/src:ro
+      - api_logs:/app/logs
+
+  web:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile
+    environment:
+      NODE_ENV: development

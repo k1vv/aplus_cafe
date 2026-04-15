@@ -1,0 +1,25 @@
+.git
+.gitignore
+*.md
+.env
+.env.*
+!.env.example
+.vscode
+.idea
+*.log
+
+# Node
+**/node_modules
+**/dist
+**/.next
+**/coverage
+
+# Java
+**/target
+**/*.class
+**/*.jar
+**/*.war
+
+# OS
+.DS_Store
+Thumbs.db

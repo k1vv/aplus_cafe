@@ -1,0 +1,37 @@
+version: '3.8'
+
+# Production overrides - use with: docker-compose -f docker-compose.yml -f docker-compose.prod.yml up
+
+services:
+  db:
+    environment:
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Database password is required}
+    # Don't expose DB port in production
+    ports: []
+
+  api:
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SPRING_JPA_HIBERNATE_DDL_AUTO: validate
+      SPRING_JPA_SHOW_SQL: "false"
+      LOGGING_LEVEL_ROOT: WARN
+      LOGGING_LEVEL_COM_APLUSCAFE: INFO
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT secret key is required}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:?Stripe secret key is required}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:?Stripe webhook secret is required}
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
+
+  web:
+    environment:
+      NODE_ENV: production
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
