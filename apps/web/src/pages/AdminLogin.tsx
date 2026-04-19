@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { Mail, Lock, Shield, Coffee } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -11,9 +11,23 @@ import LoadingOverlay from "@/components/LoadingOverlay";
 
 export default function AdminLogin() {
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { login, user, isAuthenticated, loading: authLoading } = useAuth();
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({ email: "", password: "" });
+
+  // Redirect already logged-in users based on their role
+  useEffect(() => {
+    if (!authLoading && isAuthenticated && user) {
+      if (user.role === "ADMIN") {
+        navigate("/admin", { replace: true });
+      } else if (user.role === "RIDER") {
+        navigate("/rider/dashboard", { replace: true });
+      } else {
+        // Regular user - go to home
+        navigate("/", { replace: true });
+      }
+    }
+  }, [authLoading, isAuthenticated, user, navigate]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));

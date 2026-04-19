@@ -32,6 +32,12 @@ public class ReservationService {
     private final ReservationSlotRepository reservationSlotRepository;
     private final UserRepository userRepository;
     private final ScheduleService scheduleService;
+    private final EmailService emailService;
+
+    private static final java.time.format.DateTimeFormatter DATE_FORMATTER =
+            java.time.format.DateTimeFormatter.ofPattern("EEEE, MMMM d, yyyy");
+    private static final java.time.format.DateTimeFormatter TIME_FORMATTER =
+            java.time.format.DateTimeFormatter.ofPattern("h:mm a");
 
     public List<CafeTableResponse> getAllTables() {
         log.debug("Fetching all active tables");
@@ -133,6 +139,23 @@ public class ReservationService {
         log.info("Reservation created successfully - ID: {}, table: {}, date: {}, time: {}-{}",
                 reservation.getId(), table.getTableNumber(), request.getReservationDate(),
                 request.getStartTime(), request.getEndTime());
+
+        // Send confirmation email
+        try {
+            emailService.sendReservationConfirmationEmail(
+                    user.getEmail(),
+                    user.getFullName(),
+                    reservation.getId(),
+                    table.getTableNumber(),
+                    request.getReservationDate().format(DATE_FORMATTER),
+                    request.getStartTime().format(TIME_FORMATTER),
+                    request.getPartySize()
+            );
+            log.info("Reservation confirmation email sent for reservation ID: {}", reservation.getId());
+        } catch (Exception e) {
+            log.error("Failed to send reservation confirmation email: {}", e.getMessage());
+        }
+
         return ReservationResponse.fromEntity(reservation);
     }
 

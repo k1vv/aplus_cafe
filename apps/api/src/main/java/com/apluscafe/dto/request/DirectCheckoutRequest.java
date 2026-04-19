@@ -71,5 +71,26 @@ public class DirectCheckoutRequest {
         private String notes;
 
         private Boolean contactless = false;
+
+        // Delivery coordinates for accurate tracking
+        @DecimalMin(value = "-90.0", message = "Latitude must be between -90 and 90")
+        @DecimalMax(value = "90.0", message = "Latitude must be between -90 and 90")
+        private Double lat;
+
+        @DecimalMin(value = "-180.0", message = "Longitude must be between -180 and 180")
+        @DecimalMax(value = "180.0", message = "Longitude must be between -180 and 180")
+        private Double lng;
+
+        // PICKUP order fields
+        @Size(max = 10, message = "Pickup time must not exceed 10 characters")
+        private String pickupTime; // e.g., "15", "30", "45", "60" minutes or empty for ASAP
+
+        // DINE_IN order fields
+        @Size(max = 20, message = "Table number must not exceed 20 characters")
+        private String tableNumber;
+
+        @Min(value = 1, message = "Party size must be at least 1")
+        @Max(value = 20, message = "Party size must not exceed 20")
+        private Integer partySize;
     }
 }

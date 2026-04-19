@@ -150,8 +150,8 @@ export default function LocationPicker({ onLocationSelect, initialLocation, clas
 
   return (
     <div className={`space-y-4 ${className}`}>
-      {/* Map Container */}
-      <div className="relative rounded-xl overflow-hidden border border-border" style={{ height: "300px" }}>
+      {/* Map Container - isolate creates new stacking context to prevent z-index leakage */}
+      <div className="relative rounded-xl overflow-hidden border border-border isolate" style={{ height: "300px" }}>
         <MapContainer
           center={[mapCenter.lat, mapCenter.lng]}
           zoom={13}

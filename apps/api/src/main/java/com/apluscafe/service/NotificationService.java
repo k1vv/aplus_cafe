@@ -17,37 +17,50 @@ import java.util.List;
 public class NotificationService {
 
     private final PushSubscriptionRepository subscriptionRepository;
+    private final EmailService emailService;
 
     /**
-     * Send order status update notification
+     * Send order status update notification via email and push (if available)
      */
     @Async
     public void sendOrderStatusNotification(Order order, OrderStatus newStatus) {
         Long userId = order.getUser().getId();
-        List<PushSubscription> subscriptions = subscriptionRepository.findByUserId(userId);
-
-        if (subscriptions.isEmpty()) {
-            log.debug("No push subscriptions for user: {}", userId);
-            return;
-        }
+        String userEmail = order.getUser().getEmail();
+        String userName = order.getUser().getFullName();
 
         String title = getNotificationTitle(newStatus);
         String body = getNotificationBody(order, newStatus);
 
-        for (PushSubscription subscription : subscriptions) {
-            try {
-                // In a real implementation, you would use a Web Push library like web-push
-                // to send the notification to the subscription endpoint.
-                // For now, we just log it.
-                log.info("Would send push notification to user {}: {} - {}",
-                        userId, title, body);
+        // Send email notification for important status updates
+        try {
+            // Skip sending email for PENDING status (receipt already sent separately)
+            if (newStatus != OrderStatus.PENDING) {
+                emailService.sendOrderStatusEmail(
+                    userEmail,
+                    userName,
+                    order.getId(),
+                    newStatus.name(),
+                    body
+                );
+                log.info("Order status email sent to user {} for order {} - status: {}",
+                        userId, order.getId(), newStatus);
+            }
+        } catch (Exception e) {
+            log.error("Failed to send order status email to user {}: {}", userId, e.getMessage());
+        }
 
-                // TODO: Implement actual web push sending with libraries like:
-                // - nl.martijndwars:web-push (Java)
-                // - WebPushService
+        // Also try push notifications if user has subscriptions
+        List<PushSubscription> subscriptions = subscriptionRepository.findByUserId(userId);
 
-            } catch (Exception e) {
-                log.error("Failed to send push notification: {}", e.getMessage());
+        if (!subscriptions.isEmpty()) {
+            for (PushSubscription subscription : subscriptions) {
+                try {
+                    // Log for now - web push requires VAPID keys setup
+                    log.debug("Push notification queued for user {}: {} - {}",
+                            userId, title, body);
+                } catch (Exception e) {
+                    log.error("Failed to send push notification: {}", e.getMessage());
+                }
             }
         }
     }

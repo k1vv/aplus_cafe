@@ -52,6 +52,11 @@ public class OrderResponse {
     private String assignedRiderName;
     private String deliveryStatus;
 
+    // Delivery location info for tracking
+    private String deliveryAddress;
+    private Double deliveryLatitude;
+    private Double deliveryLongitude;
+
     public static OrderResponse fromEntity(Order order) {
         // Calculate estimated delivery minutes from delivery entity if available
         Integer estimatedMinutes = 45; // Default 45 minutes
@@ -81,6 +86,11 @@ public class OrderResponse {
             deliveryStatusStr = delivery.getStatus() != null ? delivery.getStatus().name() : null;
         }
 
+        // Get delivery address info
+        String deliveryAddr = delivery != null ? delivery.getDeliveryAddress() : null;
+        Double deliveryLat = delivery != null ? delivery.getDeliveryLatitude() : null;
+        Double deliveryLng = delivery != null ? delivery.getDeliveryLongitude() : null;
+
         return OrderResponse.builder()
                 .id(order.getId())
                 .status(order.getStatus())
@@ -108,6 +118,9 @@ public class OrderResponse {
                 .assignedRiderId(riderId)
                 .assignedRiderName(riderName)
                 .deliveryStatus(deliveryStatusStr)
+                .deliveryAddress(deliveryAddr)
+                .deliveryLatitude(deliveryLat)
+                .deliveryLongitude(deliveryLng)
                 .build();
     }
 

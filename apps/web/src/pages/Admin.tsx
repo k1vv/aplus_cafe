@@ -6,7 +6,7 @@ import { useAuth } from "@/context/AuthContext";
 import {
   ArrowLeft, LayoutDashboard, UtensilsCrossed, Package, CalendarDays, Users,
   Plus, Edit2, Trash2, Check, X, ChevronDown, RefreshCw, TrendingUp, Clock, Truck, DollarSign,
-  Star, MessageSquare, Megaphone, Send, LogOut, Upload, ImageIcon, Calendar
+  Star, MessageSquare, Megaphone, Send, LogOut, Upload, ImageIcon, Calendar, Search
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -463,6 +463,29 @@ function OrdersManagement() {
   const [cancelModalOrder, setCancelModalOrder] = useState<Order | null>(null);
   const [cancellationReason, setCancellationReason] = useState("");
 
+  // Search and filter state
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("ALL");
+
+  // Filter orders based on search query and status
+  const filteredOrders = orders.filter((order) => {
+    // Status filter
+    if (statusFilter !== "ALL" && order.status?.toUpperCase() !== statusFilter) {
+      return false;
+    }
+
+    // Search filter (order ID, customer name, email)
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim();
+      const matchesId = order.id.toString().toLowerCase().includes(query);
+      const matchesName = order.customerName?.toLowerCase().includes(query);
+      const matchesEmail = order.customerEmail?.toLowerCase().includes(query);
+      return matchesId || matchesName || matchesEmail;
+    }
+
+    return true;
+  });
+
   const handleAssignRider = async (orderId: string, riderId: number) => {
     assignRiderMutation.mutate({ orderId, riderId });
   };
@@ -541,6 +564,9 @@ function OrdersManagement() {
     }
   };
 
+  // Available statuses for filter
+  const orderStatuses = ["ALL", "PENDING", "CONFIRMED", "PREPARING", "READY_FOR_PICKUP", "OUT_FOR_DELIVERY", "DELIVERED", "CANCELLED"];
+
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
@@ -550,15 +576,58 @@ function OrdersManagement() {
         </Button>
       </div>
 
+      {/* Search and Filter Controls */}
+      <div className="mb-4 p-4 rounded-xl border border-border bg-card space-y-3">
+        <div className="flex flex-col sm:flex-row gap-3">
+          {/* Search Input */}
+          <div className="flex-1">
+            <Input
+              placeholder="Search by Order ID, Customer Name, or Email..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full"
+            />
+          </div>
+          {/* Status Filter */}
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="h-10 px-3 rounded-md border border-input bg-background text-sm min-w-[160px]"
+          >
+            {orderStatuses.map((status) => (
+              <option key={status} value={status}>
+                {status === "ALL" ? "All Statuses" : status.replace(/_/g, " ")}
+              </option>
+            ))}
+          </select>
+        </div>
+        {/* Results count */}
+        <div className="flex items-center justify-between text-xs text-muted-foreground">
+          <span>
+            Showing {filteredOrders.length} of {orders.length} orders
+          </span>
+          {(searchQuery || statusFilter !== "ALL") && (
+            <button
+              onClick={() => { setSearchQuery(""); setStatusFilter("ALL"); }}
+              className="text-primary hover:underline"
+            >
+              Clear filters
+            </button>
+          )}
+        </div>
+      </div>
+
       {loading ? (
         <div className="flex justify-center py-12">
           <div className="h-6 w-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
         </div>
-      ) : orders.length === 0 ? (
-        <div className="text-center py-12 text-muted-foreground">No orders found</div>
+      ) : filteredOrders.length === 0 ? (
+        <div className="text-center py-12 text-muted-foreground">
+          {orders.length === 0 ? "No orders found" : "No orders match your search criteria"}
+        </div>
       ) : (
         <div className="space-y-3">
-          {orders.map((order) => {
+          {filteredOrders.map((order) => {
             const isExpanded = expandedOrderId === order.id;
             return (
               <div
@@ -708,15 +777,25 @@ function OrdersManagement() {
                                 disabled={assignRiderMutation.isPending || unassignRiderMutation.isPending}
                               >
                                 <option value="">Select a rider...</option>
-                                {riders.filter(r => r.isAvailable).map(rider => (
-                                  <option key={rider.id} value={rider.id}>
-                                    {rider.name} - {rider.vehicleType} ({rider.licensePlate})
+                                {riders
+                                  .sort((a, b) => (b.isAvailable ? 1 : 0) - (a.isAvailable ? 1 : 0))
+                                  .map(rider => (
+                                  <option
+                                    key={rider.id}
+                                    value={rider.id}
+                                    disabled={!rider.isAvailable}
+                                    className={!rider.isAvailable ? 'text-muted-foreground' : ''}
+                                  >
+                                    {rider.isAvailable ? '🟢' : '🔴'} {rider.name} - {rider.vehicleType} ({rider.licensePlate}) {!rider.isAvailable ? '(Offline)' : ''}
                                   </option>
                                 ))}
                               </select>
                               {riders.filter(r => r.isAvailable).length === 0 && (
-                                <p className="text-xs text-destructive">No available riders</p>
+                                <p className="text-xs text-destructive">No riders are currently online</p>
                               )}
+                              <p className="text-[10px] text-muted-foreground">
+                                🟢 Online ({riders.filter(r => r.isAvailable).length}) • 🔴 Offline ({riders.filter(r => !r.isAvailable).length})
+                              </p>
                             </div>
                           ) : (
                             <p className="text-xs text-muted-foreground">

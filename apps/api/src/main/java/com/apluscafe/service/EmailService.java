@@ -276,6 +276,71 @@ public class EmailService {
     public record OrderItemInfo(String name, int quantity, java.math.BigDecimal unitPrice, java.math.BigDecimal subtotal) {}
 
     @Async
+    public void sendOrderStatusEmail(String to, String fullName, Long orderId, String status, String statusMessage) {
+        String subject = "APlus Cafe - Order #" + orderId + " Update";
+
+        String statusIcon;
+        String statusColor;
+        String statusBgColor;
+
+        switch (status) {
+            case "CONFIRMED" -> { statusIcon = "✓"; statusColor = "#166534"; statusBgColor = "#dcfce7"; }
+            case "PREPARING" -> { statusIcon = "👨‍🍳"; statusColor = "#ca8a04"; statusBgColor = "#fef9c3"; }
+            case "READY_FOR_PICKUP" -> { statusIcon = "✅"; statusColor = "#166534"; statusBgColor = "#dcfce7"; }
+            case "OUT_FOR_DELIVERY" -> { statusIcon = "🚚"; statusColor = "#1d4ed8"; statusBgColor = "#dbeafe"; }
+            case "DELIVERED" -> { statusIcon = "🎉"; statusColor = "#166534"; statusBgColor = "#dcfce7"; }
+            case "CANCELLED" -> { statusIcon = "❌"; statusColor = "#dc2626"; statusBgColor = "#fee2e2"; }
+            default -> { statusIcon = "📋"; statusColor = "#666"; statusBgColor = "#f3f4f6"; }
+        }
+
+        String displayStatus = status.replace("_", " ");
+
+        String htmlContent = String.format("""
+            <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 0; background-color: #f8f9fa;">
+                <!-- Header -->
+                <div style="background-color: #1a1a1a; padding: 30px; text-align: center; border-radius: 8px 8px 0 0;">
+                    <h1 style="color: #F97316; font-family: Georgia, 'Times New Roman', serif; margin: 0; font-size: 32px; font-weight: normal;">APlus</h1>
+                    <p style="color: #888; font-size: 12px; margin: 5px 0 0 0; letter-spacing: 2px;">CAFE & RESTAURANT</p>
+                </div>
+
+                <!-- Status Badge -->
+                <div style="background-color: #ffffff; padding: 25px 30px 0 30px; text-align: center;">
+                    <div style="background-color: %s; color: %s; padding: 12px 24px; border-radius: 25px; display: inline-block; font-size: 14px; font-weight: bold; letter-spacing: 1px;">
+                        %s %s
+                    </div>
+                </div>
+
+                <!-- Body -->
+                <div style="background-color: #ffffff; padding: 30px;">
+                    <h2 style="color: #1a1a1a; margin: 0 0 10px 0; font-size: 20px; text-align: center;">Hi %s!</h2>
+                    <p style="color: #666; font-size: 15px; line-height: 1.6; text-align: center; margin: 0 0 15px 0;">
+                        Your order <strong style="color: #F97316;">#%d</strong> has been updated.
+                    </p>
+                    <p style="color: #333; font-size: 16px; line-height: 1.6; text-align: center; margin: 20px 0;">
+                        %s
+                    </p>
+
+                    <!-- Track Order Button -->
+                    <div style="text-align: center; margin: 30px 0;">
+                        <a href="%s/orders" style="background-color: #F97316; color: white; padding: 16px 40px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block; font-size: 14px; letter-spacing: 1px; text-transform: uppercase;">
+                            Track Your Order
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Footer -->
+                <div style="background-color: #1a1a1a; padding: 25px; text-align: center; border-radius: 0 0 8px 8px;">
+                    <p style="color: #888; font-size: 12px; margin: 0;">
+                        &copy; 2026 APlus Cafe. All rights reserved.
+                    </p>
+                </div>
+            </div>
+            """, statusBgColor, statusColor, statusIcon, displayStatus, fullName, orderId, statusMessage, frontendUrl);
+
+        sendHtmlEmail(to, subject, htmlContent);
+    }
+
+    @Async
     public void send2FAEnabledEmail(String to, String fullName) {
         String subject = "Two-Factor Authentication Enabled - APlus Cafe";
 
@@ -355,5 +420,186 @@ public class EmailService {
 
         mailSender.send(message);
         log.info("Simple email sent successfully to: {}", to);
+    }
+
+    @Async
+    public void sendReservationReminderEmail(String to, String fullName, Long reservationId,
+                                             String tableNumber, String reservationDate,
+                                             String startTime, int partySize) {
+        String subject = "Reminder: Your APlus Cafe Reservation Tomorrow";
+
+        String htmlContent = String.format("""
+            <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 0; background-color: #f8f9fa;">
+                <!-- Header -->
+                <div style="background-color: #1a1a1a; padding: 30px; text-align: center; border-radius: 8px 8px 0 0;">
+                    <h1 style="color: #F97316; font-family: Georgia, 'Times New Roman', serif; margin: 0; font-size: 32px; font-weight: normal;">APlus</h1>
+                    <p style="color: #888; font-size: 12px; margin: 5px 0 0 0; letter-spacing: 2px;">CAFE & RESTAURANT</p>
+                </div>
+
+                <!-- Reminder Badge -->
+                <div style="background-color: #ffffff; padding: 25px 30px 0 30px; text-align: center;">
+                    <div style="background-color: #fef9c3; color: #ca8a04; padding: 12px 24px; border-radius: 25px; display: inline-block; font-size: 14px; font-weight: bold; letter-spacing: 1px;">
+                        ⏰ RESERVATION REMINDER
+                    </div>
+                </div>
+
+                <!-- Body -->
+                <div style="background-color: #ffffff; padding: 30px;">
+                    <h2 style="color: #1a1a1a; margin: 0 0 10px 0; font-size: 20px; text-align: center;">Hi %s!</h2>
+                    <p style="color: #666; font-size: 15px; line-height: 1.6; text-align: center; margin: 0 0 25px 0;">
+                        This is a friendly reminder about your upcoming reservation at APlus Cafe.
+                    </p>
+
+                    <!-- Reservation Details -->
+                    <div style="background-color: #f8f9fa; border-radius: 12px; padding: 20px; margin: 20px 0;">
+                        <table style="width: 100%%;">
+                            <tr>
+                                <td style="padding: 10px 0;">
+                                    <span style="color: #888; font-size: 11px; text-transform: uppercase; letter-spacing: 1px;">Reservation ID</span><br>
+                                    <span style="color: #F97316; font-weight: bold; font-size: 16px;">#%d</span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 10px 0; border-top: 1px solid #e5e7eb;">
+                                    <span style="color: #888; font-size: 11px; text-transform: uppercase; letter-spacing: 1px;">📅 Date</span><br>
+                                    <span style="color: #333; font-weight: 600; font-size: 15px;">%s</span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 10px 0; border-top: 1px solid #e5e7eb;">
+                                    <span style="color: #888; font-size: 11px; text-transform: uppercase; letter-spacing: 1px;">🕐 Time</span><br>
+                                    <span style="color: #333; font-weight: 600; font-size: 15px;">%s</span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 10px 0; border-top: 1px solid #e5e7eb;">
+                                    <span style="color: #888; font-size: 11px; text-transform: uppercase; letter-spacing: 1px;">🪑 Table</span><br>
+                                    <span style="color: #333; font-weight: 600; font-size: 15px;">Table %s</span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 10px 0; border-top: 1px solid #e5e7eb;">
+                                    <span style="color: #888; font-size: 11px; text-transform: uppercase; letter-spacing: 1px;">👥 Party Size</span><br>
+                                    <span style="color: #333; font-weight: 600; font-size: 15px;">%d %s</span>
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
+
+                    <div style="background-color: #fff7ed; border-left: 4px solid #F97316; padding: 15px; margin: 20px 0; border-radius: 0 8px 8px 0;">
+                        <p style="color: #9a3412; font-size: 13px; margin: 0;">
+                            <strong>Need to make changes?</strong><br>
+                            Please contact us at least 2 hours before your reservation time to modify or cancel.
+                        </p>
+                    </div>
+
+                    <!-- View Reservation Button -->
+                    <div style="text-align: center; margin: 30px 0;">
+                        <a href="%s/book" style="background-color: #F97316; color: white; padding: 16px 40px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block; font-size: 14px; letter-spacing: 1px; text-transform: uppercase;">
+                            View My Reservations
+                        </a>
+                    </div>
+
+                    <p style="color: #666; font-size: 14px; text-align: center; margin-top: 20px;">
+                        We look forward to seeing you! 🍽️
+                    </p>
+                </div>
+
+                <!-- Footer -->
+                <div style="background-color: #1a1a1a; padding: 25px; text-align: center; border-radius: 0 0 8px 8px;">
+                    <p style="color: #888; font-size: 12px; margin: 0;">
+                        &copy; 2026 APlus Cafe. All rights reserved.
+                    </p>
+                    <p style="color: #666; font-size: 11px; margin: 10px 0 0 0;">
+                        Questions? Contact us at support@aplus.cafe
+                    </p>
+                </div>
+            </div>
+            """, fullName, reservationId, reservationDate, startTime, tableNumber,
+            partySize, partySize == 1 ? "person" : "people", frontendUrl);
+
+        sendHtmlEmail(to, subject, htmlContent);
+    }
+
+    @Async
+    public void sendReservationConfirmationEmail(String to, String fullName, Long reservationId,
+                                                  String tableNumber, String reservationDate,
+                                                  String startTime, int partySize) {
+        String subject = "Reservation Confirmed - APlus Cafe #" + reservationId;
+
+        String htmlContent = String.format("""
+            <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 0; background-color: #f8f9fa;">
+                <!-- Header -->
+                <div style="background-color: #1a1a1a; padding: 30px; text-align: center; border-radius: 8px 8px 0 0;">
+                    <h1 style="color: #F97316; font-family: Georgia, 'Times New Roman', serif; margin: 0; font-size: 32px; font-weight: normal;">APlus</h1>
+                    <p style="color: #888; font-size: 12px; margin: 5px 0 0 0; letter-spacing: 2px;">CAFE & RESTAURANT</p>
+                </div>
+
+                <!-- Confirmed Badge -->
+                <div style="background-color: #ffffff; padding: 25px 30px 0 30px; text-align: center;">
+                    <div style="background-color: #dcfce7; color: #166534; padding: 12px 24px; border-radius: 25px; display: inline-block; font-size: 14px; font-weight: bold; letter-spacing: 1px;">
+                        ✓ RESERVATION CONFIRMED
+                    </div>
+                </div>
+
+                <!-- Body -->
+                <div style="background-color: #ffffff; padding: 30px;">
+                    <h2 style="color: #1a1a1a; margin: 0 0 10px 0; font-size: 20px; text-align: center;">Thank you, %s!</h2>
+                    <p style="color: #666; font-size: 15px; line-height: 1.6; text-align: center; margin: 0 0 25px 0;">
+                        Your reservation has been confirmed. Here are the details:
+                    </p>
+
+                    <!-- Reservation Details -->
+                    <div style="background-color: #f8f9fa; border-radius: 12px; padding: 20px; margin: 20px 0;">
+                        <table style="width: 100%%;">
+                            <tr>
+                                <td style="padding: 10px 0;">
+                                    <span style="color: #888; font-size: 11px; text-transform: uppercase; letter-spacing: 1px;">Confirmation #</span><br>
+                                    <span style="color: #F97316; font-weight: bold; font-size: 18px;">%d</span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 10px 0; border-top: 1px solid #e5e7eb;">
+                                    <span style="color: #888; font-size: 11px; text-transform: uppercase; letter-spacing: 1px;">📅 Date</span><br>
+                                    <span style="color: #333; font-weight: 600; font-size: 15px;">%s</span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 10px 0; border-top: 1px solid #e5e7eb;">
+                                    <span style="color: #888; font-size: 11px; text-transform: uppercase; letter-spacing: 1px;">🕐 Time</span><br>
+                                    <span style="color: #333; font-weight: 600; font-size: 15px;">%s</span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 10px 0; border-top: 1px solid #e5e7eb;">
+                                    <span style="color: #888; font-size: 11px; text-transform: uppercase; letter-spacing: 1px;">🪑 Table</span><br>
+                                    <span style="color: #333; font-weight: 600; font-size: 15px;">Table %s</span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 10px 0; border-top: 1px solid #e5e7eb;">
+                                    <span style="color: #888; font-size: 11px; text-transform: uppercase; letter-spacing: 1px;">👥 Party Size</span><br>
+                                    <span style="color: #333; font-weight: 600; font-size: 15px;">%d %s</span>
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
+
+                    <p style="color: #666; font-size: 14px; text-align: center; margin-top: 20px;">
+                        We'll send you a reminder 24 hours before your reservation. 🍽️
+                    </p>
+                </div>
+
+                <!-- Footer -->
+                <div style="background-color: #1a1a1a; padding: 25px; text-align: center; border-radius: 0 0 8px 8px;">
+                    <p style="color: #888; font-size: 12px; margin: 0;">
+                        &copy; 2026 APlus Cafe. All rights reserved.
+                    </p>
+                </div>
+            </div>
+            """, fullName, reservationId, reservationDate, startTime, tableNumber,
+            partySize, partySize == 1 ? "person" : "people");
+
+        sendHtmlEmail(to, subject, htmlContent);
     }
 }

@@ -34,9 +34,48 @@ public class OrderService {
     private final RiderDetailsRepository riderDetailsRepository;
     private final EmailService emailService;
     private final NotificationService notificationService;
+    private final RiderSimulationService riderSimulationService;
 
     private static final BigDecimal SERVICE_CHARGE_RATE = new BigDecimal("0.06"); // 6%
-    private static final BigDecimal DELIVERY_FEE = new BigDecimal("5.00");
+    private static final BigDecimal DELIVERY_FEE = new BigDecimal("3.00"); // RM 3 delivery fee
+
+    // Shop location constants for delivery range validation
+    private static final double SHOP_LAT = 2.971129102928657;
+    private static final double SHOP_LNG = 101.73187506821965;
+    private static final double MAX_DELIVERY_RADIUS_KM = 20.0;
+
+    /**
+     * Calculate distance between two points using Haversine formula
+     * @return distance in kilometers
+     */
+    private double calculateDistanceKm(double lat1, double lon1, double lat2, double lon2) {
+        final double R = 6371; // Earth's radius in kilometers
+        double dLat = Math.toRadians(lat2 - lat1);
+        double dLon = Math.toRadians(lon2 - lon1);
+        double a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                   Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2)) *
+                   Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return R * c;
+    }
+
+    /**
+     * Validate delivery location is within range
+     */
+    private void validateDeliveryRange(Double lat, Double lng) {
+        if (lat == null || lng == null) {
+            return; // Skip validation if coordinates not provided
+        }
+        double distance = calculateDistanceKm(SHOP_LAT, SHOP_LNG, lat, lng);
+        if (distance > MAX_DELIVERY_RADIUS_KM) {
+            log.warn("Delivery location out of range: {} km (max: {} km)",
+                    String.format("%.2f", distance), MAX_DELIVERY_RADIUS_KM);
+            throw new RuntimeException(String.format(
+                "Delivery location is %.1f km away. Maximum delivery range is %.0f km.",
+                distance, MAX_DELIVERY_RADIUS_KM));
+        }
+        log.debug("Delivery location within range: {} km", String.format("%.2f", distance));
+    }
 
     @Transactional
     public OrderResponse createOrder(Long userId, CreateOrderRequest request) {
@@ -171,16 +210,64 @@ public class OrderService {
                 ? deliveryDetails.getContactless()
                 : false;
 
+        // Get coordinates - try multiple sources
+        Double deliveryLat = null;
+        Double deliveryLng = null;
+
+        // 1. Try from saved Address entity
+        if (order.getDeliveryAddress() != null) {
+            deliveryLat = order.getDeliveryAddress().getLatitude();
+            deliveryLng = order.getDeliveryAddress().getLongitude();
+            if (deliveryLat != null && deliveryLng != null) {
+                log.debug("Using coordinates from saved address: [{}, {}]", deliveryLat, deliveryLng);
+            }
+        }
+
+        // 2. Try to parse from address string format: "address [lat, lng]"
+        if ((deliveryLat == null || deliveryLng == null) &&
+            address != null && address.contains("[") && address.contains("]")) {
+            try {
+                String coords = address.substring(
+                    address.lastIndexOf("[") + 1,
+                    address.lastIndexOf("]")
+                );
+                String[] parts = coords.split(",");
+                if (parts.length >= 2) {
+                    deliveryLat = Double.parseDouble(parts[0].trim());
+                    deliveryLng = Double.parseDouble(parts[1].trim());
+                    log.debug("Parsed coordinates from address string: [{}, {}]", deliveryLat, deliveryLng);
+                }
+            } catch (Exception e) {
+                log.warn("Failed to parse coordinates from address string: {}", e.getMessage());
+            }
+        }
+
+        // 3. Fallback to user's saved delivery location
+        if (deliveryLat == null || deliveryLng == null) {
+            User user = order.getUser();
+            if (user.getDeliveryLat() != null && user.getDeliveryLng() != null) {
+                deliveryLat = user.getDeliveryLat();
+                deliveryLng = user.getDeliveryLng();
+                log.debug("Using user's saved delivery location: [{}, {}]", deliveryLat, deliveryLng);
+            }
+        }
+
+        // Validate delivery range
+        validateDeliveryRange(deliveryLat, deliveryLng);
+
         Delivery delivery = Delivery.builder()
                 .order(order)
                 .deliveryAddress(address)
+                .deliveryLatitude(deliveryLat)
+                .deliveryLongitude(deliveryLng)
                 .status(DeliveryStatus.PENDING_ASSIGNMENT)
                 .deliveryNotes(deliveryDetails != null ? deliveryDetails.getNotes() : null)
                 .contactless(contactless)
                 .build();
 
         deliveryRepository.save(delivery);
-        log.info("Delivery record created for order ID: {}, status: PENDING_ASSIGNMENT, contactless: {}", order.getId(), contactless);
+        log.info("Delivery record created for order ID: {}, coords: [{}, {}], contactless: {}",
+                order.getId(), deliveryLat, deliveryLng, contactless);
     }
 
     public List<OrderResponse> getUserOrders(Long userId) {
@@ -233,6 +320,12 @@ public class OrderService {
                     delivery.setStatus(DeliveryStatus.IN_TRANSIT);
                     delivery.setPickedUpAt(LocalDateTime.now());
                     deliveryRepository.save(delivery);
+
+                    // Start SimBot simulation if SimBot is assigned
+                    if (delivery.getRider() != null && riderSimulationService.isSimBot(delivery.getRider())) {
+                        log.info("Starting SimBot simulation for order {} (status changed to OUT_FOR_DELIVERY)", orderId);
+                        riderSimulationService.startSimulation(delivery.getId());
+                    }
                 });
             }
             case DELIVERED -> {
@@ -274,6 +367,15 @@ public class OrderService {
                 .map(OrderResponse::fromEntity)
                 .collect(Collectors.toList());
         log.debug("Found {} active orders", orders.size());
+        return orders;
+    }
+
+    public List<OrderResponse> getAllOrders() {
+        log.debug("Fetching all orders (including delivered and cancelled)");
+        List<OrderResponse> orders = orderRepository.findAllOrdersWithDetails().stream()
+                .map(OrderResponse::fromEntity)
+                .collect(Collectors.toList());
+        log.debug("Found {} total orders", orders.size());
         return orders;
     }
 

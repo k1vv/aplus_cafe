@@ -48,25 +48,25 @@ export function convertApiTable(table: CafeTable, isReserved: boolean = false): 
 // Default tables for backward compatibility (when no tables prop provided)
 const defaultTables: FloorPlanTable[] = [
   // Window section
-  { id: 1, name: "W1", seats: 2, x: 55, y: 90, width: 60, height: 60, shape: "circle", status: "available", section: "window" },
-  { id: 2, name: "W2", seats: 2, x: 55, y: 190, width: 60, height: 60, shape: "circle", status: "available", section: "window" },
-  { id: 3, name: "W3", seats: 2, x: 55, y: 290, width: 60, height: 60, shape: "circle", status: "available", section: "window" },
-  { id: 4, name: "W4", seats: 2, x: 55, y: 390, width: 60, height: 60, shape: "circle", status: "available", section: "window" },
+  { id: 1, name: "W1", seats: 2, x: 80, y: 90, width: 60, height: 60, shape: "circle", status: "available", section: "window" },
+  { id: 2, name: "W2", seats: 2, x: 80, y: 170, width: 60, height: 60, shape: "circle", status: "available", section: "window" },
+  { id: 3, name: "W3", seats: 2, x: 80, y: 250, width: 60, height: 60, shape: "circle", status: "available", section: "window" },
+  { id: 4, name: "W4", seats: 2, x: 80, y: 330, width: 60, height: 60, shape: "circle", status: "available", section: "window" },
   // Main dining
-  { id: 5, name: "C1", seats: 4, x: 190, y: 110, width: 100, height: 70, shape: "rect", status: "available", section: "center" },
-  { id: 6, name: "C2", seats: 4, x: 190, y: 230, width: 100, height: 70, shape: "rect", status: "available", section: "center" },
-  { id: 7, name: "C3", seats: 4, x: 190, y: 350, width: 100, height: 70, shape: "rect", status: "available", section: "center" },
-  { id: 8, name: "C4", seats: 4, x: 350, y: 110, width: 100, height: 70, shape: "rect", status: "available", section: "center" },
-  { id: 9, name: "C5", seats: 4, x: 350, y: 230, width: 100, height: 70, shape: "rect", status: "available", section: "center" },
-  { id: 10, name: "C6", seats: 4, x: 350, y: 350, width: 100, height: 70, shape: "rect", status: "available", section: "center" },
+  { id: 5, name: "C1", seats: 4, x: 230, y: 110, width: 100, height: 70, shape: "rect", status: "available", section: "center" },
+  { id: 6, name: "C2", seats: 4, x: 230, y: 230, width: 100, height: 70, shape: "rect", status: "available", section: "center" },
+  { id: 7, name: "C3", seats: 4, x: 230, y: 350, width: 100, height: 70, shape: "rect", status: "available", section: "center" },
+  { id: 8, name: "C4", seats: 4, x: 370, y: 110, width: 100, height: 70, shape: "rect", status: "available", section: "center" },
+  { id: 9, name: "C5", seats: 4, x: 370, y: 230, width: 100, height: 70, shape: "rect", status: "available", section: "center" },
+  { id: 10, name: "C6", seats: 4, x: 370, y: 350, width: 100, height: 70, shape: "rect", status: "available", section: "center" },
   // Group area
-  { id: 11, name: "L1", seats: 6, x: 510, y: 160, width: 120, height: 80, shape: "oval", status: "available", section: "corner" },
-  { id: 12, name: "L2", seats: 6, x: 510, y: 270, width: 120, height: 80, shape: "oval", status: "available", section: "corner" },
-  { id: 13, name: "L3", seats: 8, x: 510, y: 380, width: 120, height: 80, shape: "oval", status: "available", section: "corner" },
+  { id: 11, name: "L1", seats: 6, x: 510, y: 150, width: 120, height: 80, shape: "oval", status: "available", section: "corner" },
+  { id: 12, name: "L2", seats: 6, x: 510, y: 250, width: 120, height: 80, shape: "oval", status: "available", section: "corner" },
+  { id: 13, name: "L3", seats: 8, x: 510, y: 350, width: 120, height: 80, shape: "oval", status: "available", section: "corner" },
   // Outdoor patio
-  { id: 14, name: "O1", seats: 4, x: 135, y: 520, width: 80, height: 60, shape: "rect", status: "available", section: "outdoor" },
-  { id: 15, name: "O2", seats: 4, x: 255, y: 520, width: 80, height: 60, shape: "rect", status: "available", section: "outdoor" },
-  { id: 16, name: "O3", seats: 4, x: 375, y: 520, width: 80, height: 60, shape: "rect", status: "available", section: "outdoor" },
+  { id: 14, name: "O1", seats: 4, x: 150, y: 505, width: 80, height: 60, shape: "rect", status: "available", section: "outdoor" },
+  { id: 15, name: "O2", seats: 4, x: 280, y: 505, width: 80, height: 60, shape: "rect", status: "available", section: "outdoor" },
+  { id: 16, name: "O3", seats: 4, x: 410, y: 505, width: 80, height: 60, shape: "rect", status: "available", section: "outdoor" },
 ];
 
 interface CafeFloorPlanProps {
@@ -313,7 +313,7 @@ export default function CafeFloorPlan({
           {/* Counter */}
           <rect
             x="550"
-            y="100"
+            y="80"
             width="80"
             height="50"
             rx="8"
@@ -321,7 +321,7 @@ export default function CafeFloorPlan({
             stroke="#f59e0b"
             strokeWidth="2"
           />
-          <text x="590" y="130" textAnchor="middle" fontSize="12" fontWeight="700" fill="#b45309">
+          <text x="590" y="110" textAnchor="middle" fontSize="12" fontWeight="700" fill="#b45309">
             Counter
           </text>
 
@@ -354,22 +354,18 @@ export default function CafeFloorPlan({
           </text>
 
           {/* Labels */}
-          <text x="85" y="70" fontSize="12" fontWeight="500" fill="#8b6f47">
+          <text x="85" y="60" fontSize="12" fontWeight="500" fill="#8b6f47">
             Window
           </text>
-          <text x="270" y="70" fontSize="12" fontWeight="500" fill="#8b6f47">
+          <text x="310" y="60" fontSize="12" fontWeight="500" fill="#8b6f47">
             Main Dining
           </text>
-          <text x="540" y="70" fontSize="12" fontWeight="500" fill="#8b6f47">
+          <text x="525" y="60" fontSize="12" fontWeight="500" fill="#8b6f47">
             Group Area
           </text>
-          <text x="320" y="580" textAnchor="middle" fontSize="14" fontWeight="500" fill="#16a34a">
+          <text x="320" y="585" textAnchor="middle" fontSize="14" fontWeight="500" fill="#16a34a">
             Outdoor Patio
           </text>
-
-          {/* Decorative plants */}
-          <circle cx="150" cy="445" r="12" fill="#bbf7d0" stroke="#86efac" />
-          <circle cx="500" cy="445" r="12" fill="#bbf7d0" stroke="#86efac" />
 
           {/* Tables */}
           {tablesWithStatus.map(renderTable)}

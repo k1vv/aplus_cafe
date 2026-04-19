@@ -105,8 +105,8 @@ public class AdminController {
 
     // Order Management
     @GetMapping("/orders")
-    public ResponseEntity<List<OrderResponse>> getAllActiveOrders() {
-        return ResponseEntity.ok(orderService.getActiveOrders());
+    public ResponseEntity<List<OrderResponse>> getAllOrders() {
+        return ResponseEntity.ok(orderService.getAllOrders());
     }
 
     @PatchMapping("/orders/{id}/status")

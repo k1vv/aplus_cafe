@@ -1,15 +1,20 @@
 package com.apluscafe.service;
 
 import com.apluscafe.controller.RiderTrackingController;
+import com.apluscafe.controller.OrderTrackingController;
 import com.apluscafe.entity.Delivery;
+import com.apluscafe.entity.Order;
 import com.apluscafe.entity.RiderDetails;
 import com.apluscafe.enums.DeliveryStatus;
+import com.apluscafe.enums.OrderStatus;
 import com.apluscafe.repository.DeliveryRepository;
+import com.apluscafe.repository.OrderRepository;
 import com.apluscafe.repository.RiderDetailsRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -21,10 +26,11 @@ public class RiderSimulationService {
 
     private final RiderDetailsRepository riderDetailsRepository;
     private final DeliveryRepository deliveryRepository;
+    private final OrderRepository orderRepository;
 
     // Shop location - UNITEN MZ D Tasek Hall
-    private static final double SHOP_LAT = 2.9772;
-    private static final double SHOP_LNG = 101.731;
+    private static final double SHOP_LAT = 2.971129102928657;
+    private static final double SHOP_LNG = 101.73187506821965;
 
     // Track active simulations to prevent duplicates
     private final Map<Long, Boolean> activeSimulations = new ConcurrentHashMap<>();
@@ -47,6 +53,9 @@ public class RiderSimulationService {
         }
 
         try {
+            // Wait for transaction to commit before fetching delivery
+            Thread.sleep(1500);
+
             Delivery delivery = deliveryRepository.findById(deliveryId).orElse(null);
             if (delivery == null || delivery.getRider() == null) {
                 log.warn("Cannot start simulation - delivery or rider not found: {}", deliveryId);
@@ -100,6 +109,16 @@ public class RiderSimulationService {
             delivery.setStatus(DeliveryStatus.PICKED_UP);
             delivery.setPickedUpAt(java.time.LocalDateTime.now());
             deliveryRepository.save(delivery);
+
+            // Also update Order status to OUT_FOR_DELIVERY so frontend shows tracking
+            Order order = delivery.getOrder();
+            if (order != null && order.getStatus() != OrderStatus.OUT_FOR_DELIVERY) {
+                order.setStatus(OrderStatus.OUT_FOR_DELIVERY);
+                orderRepository.save(order);
+                // Broadcast order update to connected clients
+                OrderTrackingController.broadcastOrderUpdate(order);
+                log.info("Order {} status updated to OUT_FOR_DELIVERY for SimBot simulation", order.getId());
+            }
 
             // Simulate movement in steps
             int steps = 20; // 20 steps to reach destination
@@ -160,6 +179,17 @@ public class RiderSimulationService {
                 rider.setCurrentLongitude(destLng);
                 rider.setTotalDeliveries(rider.getTotalDeliveries() + 1);
                 riderDetailsRepository.save(rider);
+
+                // Also update Order status to DELIVERED
+                Order deliveredOrder = delivery.getOrder();
+                if (deliveredOrder != null && deliveredOrder.getStatus() != OrderStatus.DELIVERED) {
+                    deliveredOrder.setStatus(OrderStatus.DELIVERED);
+                    deliveredOrder.setDeliveredAt(java.time.LocalDateTime.now());
+                    orderRepository.save(deliveredOrder);
+                    // Broadcast order update to connected clients
+                    OrderTrackingController.broadcastOrderUpdate(deliveredOrder);
+                    log.info("Order {} status updated to DELIVERED by SimBot simulation", deliveredOrder.getId());
+                }
 
                 log.info("SimBot simulation completed - delivery {} marked as DELIVERED", deliveryId);
             }

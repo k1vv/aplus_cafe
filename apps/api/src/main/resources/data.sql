@@ -82,95 +82,155 @@ WHERE NOT EXISTS (SELECT 1 FROM users WHERE email = 'simbot.rider@apluscafe.com'
 -- Insert rider details for each rider user
 -- Note: We use subqueries to get the user IDs since they may vary
 
--- Rider details for Ahmad
+-- Rider details for Ahmad (starts fresh at shop location)
 INSERT INTO rider_details (user_id, vehicle_type, license_plate, is_available, current_latitude, current_longitude, rating, total_deliveries)
-SELECT id, 'Motorcycle', 'WA 1234 B', true, 2.9772, 101.731, 4.8, 150
+SELECT id, 'Motorcycle', 'WA 1234 B', true, 2.971129102928657, 101.73187506821965, 5.0, 0
 FROM users WHERE email = 'ahmad.rider@apluscafe.com'
 AND NOT EXISTS (SELECT 1 FROM rider_details rd JOIN users u ON rd.user_id = u.id WHERE u.email = 'ahmad.rider@apluscafe.com');
 
--- Rider details for Mei Ling
+-- Rider details for Mei Ling (starts fresh at shop location)
 INSERT INTO rider_details (user_id, vehicle_type, license_plate, is_available, current_latitude, current_longitude, rating, total_deliveries)
-SELECT id, 'Motorcycle', 'WB 5678 C', true, 2.9772, 101.731, 4.9, 200
+SELECT id, 'Motorcycle', 'WB 5678 C', true, 2.971129102928657, 101.73187506821965, 5.0, 0
 FROM users WHERE email = 'meiling.rider@apluscafe.com'
 AND NOT EXISTS (SELECT 1 FROM rider_details rd JOIN users u ON rd.user_id = u.id WHERE u.email = 'meiling.rider@apluscafe.com');
 
 -- Rider details for SimBot (Simulation rider - starts at shop location)
 INSERT INTO rider_details (user_id, vehicle_type, license_plate, is_available, current_latitude, current_longitude, rating, total_deliveries)
-SELECT id, 'E-Bike', 'SIM-BOT', true, 2.9772, 101.731, 5.0, 999
+SELECT id, 'E-Bike', 'SIM-BOT', true, 2.971129102928657, 101.73187506821965, 5.0, 0
 FROM users WHERE email = 'simbot.rider@apluscafe.com'
 AND NOT EXISTS (SELECT 1 FROM rider_details rd JOIN users u ON rd.user_id = u.id WHERE u.email = 'simbot.rider@apluscafe.com');
 
 -- ============================================
 -- CAFE TABLES (Matching Floor Plan Layout)
 -- ============================================
+-- Values from CafeFloorPlan.tsx defaultTables
 -- Note: Column names from Hibernate naming strategy:
 -- table_number, floor_section, is_active (snake_case)
 -- positionx, positiony (lowercase concatenated)
 
 -- Window section (circular tables, 2 seats each)
 INSERT INTO cafe_tables (table_number, capacity, positionx, positiony, width, height, floor_section, shape, is_active)
-SELECT 'W1', 2, 55, 90, 60, 60, 'window', 'ROUND', true
+SELECT 'W1', 2, 80, 90, 60, 60, 'window', 'ROUND', true
 WHERE NOT EXISTS (SELECT 1 FROM cafe_tables WHERE table_number = 'W1');
 
 INSERT INTO cafe_tables (table_number, capacity, positionx, positiony, width, height, floor_section, shape, is_active)
-SELECT 'W2', 2, 55, 190, 60, 60, 'window', 'ROUND', true
+SELECT 'W2', 2, 80, 170, 60, 60, 'window', 'ROUND', true
 WHERE NOT EXISTS (SELECT 1 FROM cafe_tables WHERE table_number = 'W2');
 
 INSERT INTO cafe_tables (table_number, capacity, positionx, positiony, width, height, floor_section, shape, is_active)
-SELECT 'W3', 2, 55, 290, 60, 60, 'window', 'ROUND', true
+SELECT 'W3', 2, 80, 250, 60, 60, 'window', 'ROUND', true
 WHERE NOT EXISTS (SELECT 1 FROM cafe_tables WHERE table_number = 'W3');
 
 INSERT INTO cafe_tables (table_number, capacity, positionx, positiony, width, height, floor_section, shape, is_active)
-SELECT 'W4', 2, 55, 390, 60, 60, 'window', 'ROUND', true
+SELECT 'W4', 2, 80, 330, 60, 60, 'window', 'ROUND', true
 WHERE NOT EXISTS (SELECT 1 FROM cafe_tables WHERE table_number = 'W4');
 
 -- Main dining / Center section (rectangular tables, 4 seats each)
 INSERT INTO cafe_tables (table_number, capacity, positionx, positiony, width, height, floor_section, shape, is_active)
-SELECT 'C1', 4, 190, 110, 100, 70, 'center', 'RECTANGULAR', true
+SELECT 'C1', 4, 230, 110, 100, 70, 'center', 'RECTANGULAR', true
 WHERE NOT EXISTS (SELECT 1 FROM cafe_tables WHERE table_number = 'C1');
 
 INSERT INTO cafe_tables (table_number, capacity, positionx, positiony, width, height, floor_section, shape, is_active)
-SELECT 'C2', 4, 190, 230, 100, 70, 'center', 'RECTANGULAR', true
+SELECT 'C2', 4, 230, 230, 100, 70, 'center', 'RECTANGULAR', true
 WHERE NOT EXISTS (SELECT 1 FROM cafe_tables WHERE table_number = 'C2');
 
 INSERT INTO cafe_tables (table_number, capacity, positionx, positiony, width, height, floor_section, shape, is_active)
-SELECT 'C3', 4, 190, 350, 100, 70, 'center', 'RECTANGULAR', true
+SELECT 'C3', 4, 230, 350, 100, 70, 'center', 'RECTANGULAR', true
 WHERE NOT EXISTS (SELECT 1 FROM cafe_tables WHERE table_number = 'C3');
 
 INSERT INTO cafe_tables (table_number, capacity, positionx, positiony, width, height, floor_section, shape, is_active)
-SELECT 'C4', 4, 350, 110, 100, 70, 'center', 'RECTANGULAR', true
+SELECT 'C4', 4, 370, 110, 100, 70, 'center', 'RECTANGULAR', true
 WHERE NOT EXISTS (SELECT 1 FROM cafe_tables WHERE table_number = 'C4');
 
 INSERT INTO cafe_tables (table_number, capacity, positionx, positiony, width, height, floor_section, shape, is_active)
-SELECT 'C5', 4, 350, 230, 100, 70, 'center', 'RECTANGULAR', true
+SELECT 'C5', 4, 370, 230, 100, 70, 'center', 'RECTANGULAR', true
 WHERE NOT EXISTS (SELECT 1 FROM cafe_tables WHERE table_number = 'C5');
 
 INSERT INTO cafe_tables (table_number, capacity, positionx, positiony, width, height, floor_section, shape, is_active)
-SELECT 'C6', 4, 350, 350, 100, 70, 'center', 'RECTANGULAR', true
+SELECT 'C6', 4, 370, 350, 100, 70, 'center', 'RECTANGULAR', true
 WHERE NOT EXISTS (SELECT 1 FROM cafe_tables WHERE table_number = 'C6');
 
 -- Group area / Corner section (oval tables for larger groups)
 INSERT INTO cafe_tables (table_number, capacity, positionx, positiony, width, height, floor_section, shape, is_active)
-SELECT 'L1', 6, 510, 160, 120, 80, 'corner', 'RECTANGULAR', true
+SELECT 'L1', 6, 510, 150, 120, 80, 'corner', 'RECTANGULAR', true
 WHERE NOT EXISTS (SELECT 1 FROM cafe_tables WHERE table_number = 'L1');
 
 INSERT INTO cafe_tables (table_number, capacity, positionx, positiony, width, height, floor_section, shape, is_active)
-SELECT 'L2', 6, 510, 270, 120, 80, 'corner', 'RECTANGULAR', true
+SELECT 'L2', 6, 510, 250, 120, 80, 'corner', 'RECTANGULAR', true
 WHERE NOT EXISTS (SELECT 1 FROM cafe_tables WHERE table_number = 'L2');
 
 INSERT INTO cafe_tables (table_number, capacity, positionx, positiony, width, height, floor_section, shape, is_active)
-SELECT 'L3', 8, 510, 380, 120, 80, 'corner', 'RECTANGULAR', true
+SELECT 'L3', 8, 510, 350, 120, 80, 'corner', 'RECTANGULAR', true
 WHERE NOT EXISTS (SELECT 1 FROM cafe_tables WHERE table_number = 'L3');
 
 -- Outdoor patio section (rectangular tables, 4 seats each)
 INSERT INTO cafe_tables (table_number, capacity, positionx, positiony, width, height, floor_section, shape, is_active)
-SELECT 'O1', 4, 135, 520, 80, 60, 'outdoor', 'RECTANGULAR', true
+SELECT 'O1', 4, 150, 505, 80, 60, 'outdoor', 'RECTANGULAR', true
 WHERE NOT EXISTS (SELECT 1 FROM cafe_tables WHERE table_number = 'O1');
 
 INSERT INTO cafe_tables (table_number, capacity, positionx, positiony, width, height, floor_section, shape, is_active)
-SELECT 'O2', 4, 255, 520, 80, 60, 'outdoor', 'RECTANGULAR', true
+SELECT 'O2', 4, 280, 505, 80, 60, 'outdoor', 'RECTANGULAR', true
 WHERE NOT EXISTS (SELECT 1 FROM cafe_tables WHERE table_number = 'O2');
 
 INSERT INTO cafe_tables (table_number, capacity, positionx, positiony, width, height, floor_section, shape, is_active)
-SELECT 'O3', 4, 375, 520, 80, 60, 'outdoor', 'RECTANGULAR', true
+SELECT 'O3', 4, 410, 505, 80, 60, 'outdoor', 'RECTANGULAR', true
 WHERE NOT EXISTS (SELECT 1 FROM cafe_tables WHERE table_number = 'O3');
+
+-- ============================================
+-- RESERVATION SLOTS (Time slots for booking)
+-- ============================================
+-- Cafe hours: 9 AM - 9 PM, 30-minute intervals
+INSERT INTO reservation_slots (start_time, is_active, day_of_week)
+SELECT '09:00:00', true, null WHERE NOT EXISTS (SELECT 1 FROM reservation_slots WHERE start_time = '09:00:00');
+INSERT INTO reservation_slots (start_time, is_active, day_of_week)
+SELECT '09:30:00', true, null WHERE NOT EXISTS (SELECT 1 FROM reservation_slots WHERE start_time = '09:30:00');
+INSERT INTO reservation_slots (start_time, is_active, day_of_week)
+SELECT '10:00:00', true, null WHERE NOT EXISTS (SELECT 1 FROM reservation_slots WHERE start_time = '10:00:00');
+INSERT INTO reservation_slots (start_time, is_active, day_of_week)
+SELECT '10:30:00', true, null WHERE NOT EXISTS (SELECT 1 FROM reservation_slots WHERE start_time = '10:30:00');
+INSERT INTO reservation_slots (start_time, is_active, day_of_week)
+SELECT '11:00:00', true, null WHERE NOT EXISTS (SELECT 1 FROM reservation_slots WHERE start_time = '11:00:00');
+INSERT INTO reservation_slots (start_time, is_active, day_of_week)
+SELECT '11:30:00', true, null WHERE NOT EXISTS (SELECT 1 FROM reservation_slots WHERE start_time = '11:30:00');
+INSERT INTO reservation_slots (start_time, is_active, day_of_week)
+SELECT '12:00:00', true, null WHERE NOT EXISTS (SELECT 1 FROM reservation_slots WHERE start_time = '12:00:00');
+INSERT INTO reservation_slots (start_time, is_active, day_of_week)
+SELECT '12:30:00', true, null WHERE NOT EXISTS (SELECT 1 FROM reservation_slots WHERE start_time = '12:30:00');
+INSERT INTO reservation_slots (start_time, is_active, day_of_week)
+SELECT '13:00:00', true, null WHERE NOT EXISTS (SELECT 1 FROM reservation_slots WHERE start_time = '13:00:00');
+INSERT INTO reservation_slots (start_time, is_active, day_of_week)
+SELECT '13:30:00', true, null WHERE NOT EXISTS (SELECT 1 FROM reservation_slots WHERE start_time = '13:30:00');
+INSERT INTO reservation_slots (start_time, is_active, day_of_week)
+SELECT '14:00:00', true, null WHERE NOT EXISTS (SELECT 1 FROM reservation_slots WHERE start_time = '14:00:00');
+INSERT INTO reservation_slots (start_time, is_active, day_of_week)
+SELECT '14:30:00', true, null WHERE NOT EXISTS (SELECT 1 FROM reservation_slots WHERE start_time = '14:30:00');
+INSERT INTO reservation_slots (start_time, is_active, day_of_week)
+SELECT '15:00:00', true, null WHERE NOT EXISTS (SELECT 1 FROM reservation_slots WHERE start_time = '15:00:00');
+INSERT INTO reservation_slots (start_time, is_active, day_of_week)
+SELECT '15:30:00', true, null WHERE NOT EXISTS (SELECT 1 FROM reservation_slots WHERE start_time = '15:30:00');
+INSERT INTO reservation_slots (start_time, is_active, day_of_week)
+SELECT '16:00:00', true, null WHERE NOT EXISTS (SELECT 1 FROM reservation_slots WHERE start_time = '16:00:00');
+INSERT INTO reservation_slots (start_time, is_active, day_of_week)
+SELECT '16:30:00', true, null WHERE NOT EXISTS (SELECT 1 FROM reservation_slots WHERE start_time = '16:30:00');
+INSERT INTO reservation_slots (start_time, is_active, day_of_week)
+SELECT '17:00:00', true, null WHERE NOT EXISTS (SELECT 1 FROM reservation_slots WHERE start_time = '17:00:00');
+INSERT INTO reservation_slots (start_time, is_active, day_of_week)
+SELECT '17:30:00', true, null WHERE NOT EXISTS (SELECT 1 FROM reservation_slots WHERE start_time = '17:30:00');
+INSERT INTO reservation_slots (start_time, is_active, day_of_week)
+SELECT '18:00:00', true, null WHERE NOT EXISTS (SELECT 1 FROM reservation_slots WHERE start_time = '18:00:00');
+INSERT INTO reservation_slots (start_time, is_active, day_of_week)
+SELECT '18:30:00', true, null WHERE NOT EXISTS (SELECT 1 FROM reservation_slots WHERE start_time = '18:30:00');
+INSERT INTO reservation_slots (start_time, is_active, day_of_week)
+SELECT '19:00:00', true, null WHERE NOT EXISTS (SELECT 1 FROM reservation_slots WHERE start_time = '19:00:00');
+INSERT INTO reservation_slots (start_time, is_active, day_of_week)
+SELECT '19:30:00', true, null WHERE NOT EXISTS (SELECT 1 FROM reservation_slots WHERE start_time = '19:30:00');
+INSERT INTO reservation_slots (start_time, is_active, day_of_week)
+SELECT '20:00:00', true, null WHERE NOT EXISTS (SELECT 1 FROM reservation_slots WHERE start_time = '20:00:00');
+INSERT INTO reservation_slots (start_time, is_active, day_of_week)
+SELECT '20:30:00', true, null WHERE NOT EXISTS (SELECT 1 FROM reservation_slots WHERE start_time = '20:30:00');
+
+-- ============================================
+-- MIGRATION: Update existing reservations
+-- ============================================
+-- Set reminder_sent to false for any existing reservations that have null value
+UPDATE reservations SET reminder_sent = false WHERE reminder_sent IS NULL;

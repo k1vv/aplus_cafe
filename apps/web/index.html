@@ -12,6 +12,12 @@
     <link rel="icon" type="image/png" href="/aplus_logo.png" />
     <link rel="apple-touch-icon" href="/aplus_logo.png" />
 
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+
     <!-- Open Graph / Facebook / WhatsApp -->
     <meta property="og:title" content="APlus Cafe — Coffee & Pastry" />
     <meta property="og:description" content="Where every cup tells a story. Order coffee, pastries, and meals for delivery, pickup, or dine-in." />
@@ -30,5 +36,19 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    <script>
+      // Register Service Worker for PWA
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js')
+            .then((registration) => {
+              console.log('SW registered:', registration.scope);
+            })
+            .catch((error) => {
+              console.log('SW registration failed:', error);
+            });
+        });
+      }
+    </script>
   </body>
 </html>

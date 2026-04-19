@@ -17,7 +17,7 @@ export default function Header() {
   const isAdmin = user?.role === 'ADMIN';
 
   return (
-    <header className="sticky top-0 z-50 bg-primary text-primary-foreground">
+    <header className="sticky top-0 z-[1000] bg-primary text-primary-foreground">
       <div className="flex items-center justify-between px-3 py-3 sm:px-6 sm:py-4 md:px-10">
         <div className="flex items-center gap-2 sm:gap-4 md:gap-6">
           <Link to="/book" className="flex items-center gap-1 sm:gap-1.5 text-[10px] sm:text-xs font-medium uppercase tracking-[0.1em] sm:tracking-[0.2em] hover:opacity-70 transition-opacity">

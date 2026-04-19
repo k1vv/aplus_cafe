@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, Link, useLocation } from "react-router-dom";
 import { ArrowLeft, Mail, Lock, User, Shield, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -12,8 +12,23 @@ import LoadingOverlay from "@/components/LoadingOverlay";
 export default function Auth() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { login } = useAuth();
+  const { login, user, isAuthenticated, loading: authLoading } = useAuth();
   const [isLogin, setIsLogin] = useState(true);
+
+  // Redirect already logged-in users based on their role
+  useEffect(() => {
+    if (!authLoading && isAuthenticated && user) {
+      if (user.role === "RIDER") {
+        navigate("/rider/dashboard", { replace: true });
+      } else if (user.role === "ADMIN") {
+        navigate("/admin", { replace: true });
+      } else {
+        // Regular user - go to home or where they came from
+        const from = (location.state as { from?: string })?.from || "/";
+        navigate(from, { replace: true });
+      }
+    }
+  }, [authLoading, isAuthenticated, user, navigate, location.state]);
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({ email: "", password: "", fullName: "" });
 

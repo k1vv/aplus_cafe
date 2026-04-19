@@ -56,6 +56,13 @@ public class Order {
     @Column(columnDefinition = "TEXT")
     private String notes;
 
+    // PICKUP order fields
+    private LocalDateTime scheduledPickupTime;
+
+    // DINE_IN order fields
+    private String tableNumber;
+    private Integer partySize;
+
     private LocalDateTime confirmedAt;
     private LocalDateTime preparingAt;
     private LocalDateTime readyAt;

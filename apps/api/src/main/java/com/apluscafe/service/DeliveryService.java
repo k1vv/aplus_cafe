@@ -44,11 +44,7 @@ public class DeliveryService {
         delivery = deliveryRepository.save(delivery);
         log.info("Rider {} assigned to order {}", rider.getUser().getFullName(), orderId);
 
-        // If SimBot is assigned, start the simulation
-        if (riderSimulationService.isSimBot(rider)) {
-            log.info("SimBot assigned - starting delivery simulation for order {}", orderId);
-            riderSimulationService.startSimulation(delivery.getId());
-        }
+        // Note: SimBot simulation starts when order status becomes OUT_FOR_DELIVERY (in OrderService)
 
         return delivery;
     }

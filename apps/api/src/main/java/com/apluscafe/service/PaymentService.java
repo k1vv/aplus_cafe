@@ -45,6 +45,44 @@ public class PaymentService {
     @Value("${stripe.webhook-secret}")
     private String webhookSecret;
 
+    // Shop location constants
+    private static final double SHOP_LAT = 2.971129102928657;
+    private static final double SHOP_LNG = 101.73187506821965;
+    private static final double MAX_DELIVERY_RADIUS_KM = 20.0;
+
+    /**
+     * Calculate distance between two points using Haversine formula
+     * @return distance in kilometers
+     */
+    private double calculateDistanceKm(double lat1, double lon1, double lat2, double lon2) {
+        final double R = 6371; // Earth's radius in kilometers
+        double dLat = Math.toRadians(lat2 - lat1);
+        double dLon = Math.toRadians(lon2 - lon1);
+        double a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                   Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2)) *
+                   Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return R * c;
+    }
+
+    /**
+     * Validate delivery location is within range
+     */
+    private void validateDeliveryRange(Double lat, Double lng) {
+        if (lat == null || lng == null) {
+            return; // Skip validation if coordinates not provided
+        }
+        double distance = calculateDistanceKm(SHOP_LAT, SHOP_LNG, lat, lng);
+        if (distance > MAX_DELIVERY_RADIUS_KM) {
+            log.warn("Delivery location out of range: {} km (max: {} km)",
+                    String.format("%.2f", distance), MAX_DELIVERY_RADIUS_KM);
+            throw new RuntimeException(String.format(
+                "Delivery location is %.1f km away. Maximum delivery range is %.0f km.",
+                distance, MAX_DELIVERY_RADIUS_KM));
+        }
+        log.debug("Delivery location within range: {} km", String.format("%.2f", distance));
+    }
+
     @Transactional
     public CheckoutResponse createDirectCheckoutSession(DirectCheckoutRequest request, Long userId) throws StripeException {
         log.info("Creating direct checkout session for user ID: {}", userId);
@@ -60,6 +98,15 @@ public class PaymentService {
         boolean isDelivery = request.getDeliveryDetails() != null &&
                 !"PICKUP".equals(request.getDeliveryDetails().getAddress()) &&
                 !"DINE_IN".equals(request.getDeliveryDetails().getAddress());
+
+        // Validate delivery range for delivery orders
+        if (isDelivery && request.getDeliveryDetails() != null) {
+            validateDeliveryRange(
+                request.getDeliveryDetails().getLat(),
+                request.getDeliveryDetails().getLng()
+            );
+        }
+
         BigDecimal deliveryFee = isDelivery ? BigDecimal.valueOf(3.00) : BigDecimal.ZERO;
         BigDecimal totalAmount = subtotal.add(serviceCharge).add(deliveryFee);
 
@@ -151,6 +198,24 @@ public class PaymentService {
         }
         if (request.getDeliveryDetails().getContactless() != null && request.getDeliveryDetails().getContactless()) {
             metadata.put("contactless", "true");
+        }
+        // Store delivery coordinates if provided
+        if (request.getDeliveryDetails().getLat() != null) {
+            metadata.put("delivery_lat", request.getDeliveryDetails().getLat().toString());
+        }
+        if (request.getDeliveryDetails().getLng() != null) {
+            metadata.put("delivery_lng", request.getDeliveryDetails().getLng().toString());
+        }
+        // Store PICKUP order fields
+        if (request.getDeliveryDetails().getPickupTime() != null) {
+            metadata.put("pickup_time", request.getDeliveryDetails().getPickupTime());
+        }
+        // Store DINE_IN order fields
+        if (request.getDeliveryDetails().getTableNumber() != null) {
+            metadata.put("table_number", request.getDeliveryDetails().getTableNumber());
+        }
+        if (request.getDeliveryDetails().getPartySize() != null) {
+            metadata.put("party_size", request.getDeliveryDetails().getPartySize().toString());
         }
 
         // Store item details in metadata for order creation (JSON format)
@@ -449,6 +514,31 @@ public class PaymentService {
         BigDecimal subtotal = amountWithoutDelivery.divide(BigDecimal.valueOf(1.06), 2, java.math.RoundingMode.HALF_UP);
         BigDecimal serviceCharge = amountWithoutDelivery.subtract(subtotal);
 
+        // Handle PICKUP time
+        LocalDateTime scheduledPickupTime = null;
+        if (orderType == OrderType.PICKUP && metadata != null && metadata.containsKey("pickup_time")) {
+            String pickupMinutes = metadata.get("pickup_time");
+            if (pickupMinutes != null && !pickupMinutes.isEmpty()) {
+                try {
+                    int minutes = Integer.parseInt(pickupMinutes);
+                    scheduledPickupTime = LocalDateTime.now().plusMinutes(minutes);
+                } catch (NumberFormatException e) {
+                    log.warn("Invalid pickup time value: {}", pickupMinutes);
+                }
+            }
+        }
+
+        // Handle DINE_IN table info
+        String tableNumber = metadata != null ? metadata.get("table_number") : null;
+        Integer partySize = null;
+        if (metadata != null && metadata.containsKey("party_size")) {
+            try {
+                partySize = Integer.parseInt(metadata.get("party_size"));
+            } catch (NumberFormatException e) {
+                log.warn("Invalid party size value: {}", metadata.get("party_size"));
+            }
+        }
+
         // Create order
         Order order = Order.builder()
                 .user(user)
@@ -459,6 +549,9 @@ public class PaymentService {
                 .deliveryFee(deliveryFee)
                 .totalAmount(totalAmount)
                 .notes(notes)
+                .scheduledPickupTime(scheduledPickupTime)
+                .tableNumber(tableNumber)
+                .partySize(partySize)
                 .confirmedAt(LocalDateTime.now())
                 .orderItems(new ArrayList<>())
                 .build();
@@ -521,14 +614,60 @@ public class PaymentService {
         // Create delivery record if delivery order
         if (orderType == OrderType.DELIVERY && deliveryAddress != null && !deliveryAddress.isEmpty()) {
             boolean contactless = metadata != null && "true".equals(metadata.get("contactless"));
+
+            // Get coordinates - try multiple sources
+            Double deliveryLat = null;
+            Double deliveryLng = null;
+
+            // 1. Try to get from metadata (most reliable - passed explicitly)
+            if (metadata != null && metadata.containsKey("delivery_lat") && metadata.containsKey("delivery_lng")) {
+                try {
+                    deliveryLat = Double.parseDouble(metadata.get("delivery_lat"));
+                    deliveryLng = Double.parseDouble(metadata.get("delivery_lng"));
+                    log.debug("Using coordinates from metadata: [{}, {}]", deliveryLat, deliveryLng);
+                } catch (NumberFormatException e) {
+                    log.warn("Failed to parse coordinates from metadata");
+                }
+            }
+
+            // 2. Try to parse from address string format: "address [lat, lng]"
+            if ((deliveryLat == null || deliveryLng == null) &&
+                deliveryAddress.contains("[") && deliveryAddress.contains("]")) {
+                try {
+                    String coords = deliveryAddress.substring(
+                        deliveryAddress.lastIndexOf("[") + 1,
+                        deliveryAddress.lastIndexOf("]")
+                    );
+                    String[] parts = coords.split(",");
+                    if (parts.length >= 2) {
+                        deliveryLat = Double.parseDouble(parts[0].trim());
+                        deliveryLng = Double.parseDouble(parts[1].trim());
+                        log.debug("Parsed coordinates from address string: [{}, {}]", deliveryLat, deliveryLng);
+                    }
+                } catch (Exception e) {
+                    log.warn("Failed to parse coordinates from address string: {}", e.getMessage());
+                }
+            }
+
+            // 3. Fallback to user's saved delivery address
+            if ((deliveryLat == null || deliveryLng == null) &&
+                user.getDeliveryLat() != null && user.getDeliveryLng() != null) {
+                deliveryLat = user.getDeliveryLat();
+                deliveryLng = user.getDeliveryLng();
+                log.debug("Using user's saved delivery location: [{}, {}]", deliveryLat, deliveryLng);
+            }
+
             Delivery delivery = Delivery.builder()
                     .order(order)
                     .deliveryAddress(deliveryAddress)
+                    .deliveryLatitude(deliveryLat)
+                    .deliveryLongitude(deliveryLng)
                     .status(DeliveryStatus.PENDING_ASSIGNMENT)
                     .contactless(contactless)
                     .build();
             deliveryRepository.save(delivery);
-            log.info("Delivery record created for order: {}, contactless: {}", order.getId(), contactless);
+            log.info("Delivery record created for order: {}, coords: [{}, {}], contactless: {}",
+                    order.getId(), deliveryLat, deliveryLng, contactless);
         }
 
         // Send order confirmation email

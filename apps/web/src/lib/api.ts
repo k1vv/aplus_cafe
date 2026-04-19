@@ -20,8 +20,17 @@ interface ApiResponse<T> {
 
 async function handleResponse<T>(response: Response): Promise<ApiResponse<T>> {
   if (!response.ok) {
-    const error = await response.text();
-    return { error: error || response.statusText };
+    const errorText = await response.text();
+    // Try to parse as JSON and extract the message field
+    try {
+      const errorJson = JSON.parse(errorText);
+      // Extract just the message, or fall back to the full response
+      const message = errorJson.message || errorJson.error || errorText;
+      return { error: message };
+    } catch {
+      // If not JSON, return the raw text or status text
+      return { error: errorText || response.statusText };
+    }
   }
   // Handle 204 No Content or empty body
   if (response.status === 204) {
@@ -272,6 +281,10 @@ export interface Order {
   assignedRiderId?: number;
   assignedRiderName?: string;
   deliveryStatus?: string;
+  // Delivery location info
+  deliveryAddress?: string;
+  deliveryLatitude?: number;
+  deliveryLongitude?: number;
 }
 
 export interface Rider {
@@ -312,6 +325,14 @@ export interface CreateCheckoutRequest {
     phone: string;
     address: string;
     notes?: string;
+    contactless?: boolean;
+    lat?: number;
+    lng?: number;
+    // PICKUP order fields
+    pickupTime?: string;
+    // DINE_IN order fields
+    tableNumber?: string;
+    partySize?: number;
   };
   returnUrl: string;
 }
@@ -738,4 +759,59 @@ export const adminAuthApi = {
 
   changePassword: (currentPassword: string, newPassword: string) =>
     api.post<{ message: string }>('/admin/auth/change-password', { currentPassword, newPassword }),
+};
+
+// ==================== RIDER API ====================
+
+export interface RiderProfile {
+  id: number;
+  name: string;
+  email: string;
+  vehicleType: string;
+  licensePlate: string;
+  isAvailable: boolean;
+  currentLatitude: number | null;
+  currentLongitude: number | null;
+  rating: number;
+  totalDeliveries: number;
+}
+
+export interface RiderDelivery {
+  id: number;
+  orderId: number;
+  status: 'PENDING_ASSIGNMENT' | 'ASSIGNED' | 'PICKED_UP' | 'IN_TRANSIT' | 'DELIVERED' | 'CANCELLED';
+  deliveryAddress: string;
+  deliveryLatitude: number | null;
+  deliveryLongitude: number | null;
+  customerName: string;
+  customerPhone: string | null;
+  deliveryNotes: string | null;
+  contactless: boolean;
+  assignedAt: string | null;
+  estimatedDeliveryTime: string | null;
+  orderItems: { name: string; quantity: number }[];
+  orderTotal: number;
+}
+
+export const riderApi = {
+  // Get rider profile
+  getProfile: () => api.get<RiderProfile>('/rider/profile'),
+
+  // Get all deliveries
+  getDeliveries: () => api.get<RiderDelivery[]>('/rider/deliveries'),
+
+  // Get active delivery
+  getActiveDelivery: () => api.get<RiderDelivery | null>('/rider/deliveries/active'),
+
+  // Update location
+  updateLocation: (lat: number, lng: number) =>
+    api.post<{ message: string }>('/rider/location', { lat, lng }),
+
+  // Update delivery status
+  updateDeliveryStatus: (deliveryId: number, status: string) =>
+    api.patch<RiderDelivery>(`/rider/deliveries/${deliveryId}/status`, { status }),
+
+  // Toggle availability
+  setAvailability: (isAvailable: boolean) =>
+    api.post<{ isAvailable: boolean; message: string }>('/rider/availability', { isAvailable }),
 };

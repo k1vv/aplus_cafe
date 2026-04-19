@@ -33,34 +33,6 @@ public class RiderTrackingController {
     private static final Map<Long, CopyOnWriteArrayList<SseEmitter>> deliveryTrackers = new ConcurrentHashMap<>();
 
     /**
-     * Rider updates their current location
-     */
-    @PostMapping("/rider/location")
-    @PreAuthorize("hasRole('RIDER')")
-    public ResponseEntity<Void> updateRiderLocation(
-            @AuthenticationPrincipal UserDetailsImpl userDetails,
-            @RequestBody LocationUpdate location) {
-
-        RiderDetails rider = riderDetailsRepository.findByUserId(userDetails.getId())
-                .orElseThrow(() -> new RuntimeException("Rider not found"));
-
-        rider.setCurrentLatitude(location.getLat());
-        rider.setCurrentLongitude(location.getLng());
-        riderDetailsRepository.save(rider);
-
-        log.debug("Rider {} location updated: [{}, {}]", rider.getId(), location.getLat(), location.getLng());
-
-        // Broadcast to all active deliveries for this rider
-        for (Delivery delivery : rider.getDeliveries()) {
-            if (delivery.getStatus().isActive()) {
-                broadcastLocationUpdate(delivery.getId(), location.getLat(), location.getLng());
-            }
-        }
-
-        return ResponseEntity.ok().build();
-    }
-
-    /**
      * Customer tracks rider location for their delivery via SSE
      */
     @GetMapping(value = "/orders/{orderId}/rider-location", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
@@ -111,6 +83,10 @@ public class RiderTrackingController {
         return emitter;
     }
 
+    // Shop location constant
+    private static final double SHOP_LAT = 2.971129102928657;
+    private static final double SHOP_LNG = 101.73187506821965;
+
     /**
      * Get current rider location (polling fallback)
      */
@@ -132,13 +108,54 @@ public class RiderTrackingController {
         }
 
         RiderDetails rider = delivery.getRider();
+
+        // Calculate progress percentage based on distance
+        Double riderLat = rider.getCurrentLatitude();
+        Double riderLng = rider.getCurrentLongitude();
+        Double destLat = delivery.getDeliveryLatitude();
+        Double destLng = delivery.getDeliveryLongitude();
+
+        Integer progressPercent = null;
+        if (riderLat != null && riderLng != null && destLat != null && destLng != null) {
+            double totalDistance = calculateDistance(SHOP_LAT, SHOP_LNG, destLat, destLng);
+            double remainingDistance = calculateDistance(riderLat, riderLng, destLat, destLng);
+
+            if (totalDistance > 0) {
+                double progress = ((totalDistance - remainingDistance) / totalDistance) * 100;
+                progressPercent = (int) Math.max(0, Math.min(100, progress));
+            }
+        }
+
+        // Check if this is SimBot
+        boolean isSimBot = rider.getUser().getEmail().equals("simbot.rider@apluscafe.com");
+
         return ResponseEntity.ok(new RiderLocationData(
-                rider.getCurrentLatitude(),
-                rider.getCurrentLongitude(),
+                riderLat,
+                riderLng,
                 rider.getUser().getFullName(),
                 rider.getVehicleType(),
-                delivery.getStatus().name()
+                delivery.getStatus().name(),
+                SHOP_LAT,
+                SHOP_LNG,
+                destLat,
+                destLng,
+                progressPercent,
+                isSimBot
         ));
+    }
+
+    /**
+     * Calculate distance between two points using Haversine formula
+     */
+    private double calculateDistance(double lat1, double lng1, double lat2, double lng2) {
+        double earthRadius = 6371; // km
+        double dLat = Math.toRadians(lat2 - lat1);
+        double dLng = Math.toRadians(lng2 - lng1);
+        double a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                   Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2)) *
+                   Math.sin(dLng / 2) * Math.sin(dLng / 2);
+        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return earthRadius * c;
     }
 
     private void broadcastLocationUpdate(Long deliveryId, Double lat, Double lng) {
@@ -203,17 +220,22 @@ public class RiderTrackingController {
         }
     }
 
-    @Data
-    static class LocationUpdate {
-        private Double lat;
-        private Double lng;
-    }
-
     public record RiderLocationData(
             Double lat,
             Double lng,
             String riderName,
             String vehicleType,
-            String deliveryStatus
-    ) {}
+            String deliveryStatus,
+            Double shopLat,
+            Double shopLng,
+            Double destLat,
+            Double destLng,
+            Integer progressPercent,
+            Boolean isSimulation
+    ) {
+        // Constructor for SSE broadcasts (backward compatible)
+        public RiderLocationData(Double lat, Double lng, String riderName, String vehicleType, String deliveryStatus) {
+            this(lat, lng, riderName, vehicleType, deliveryStatus, null, null, null, null, null, null);
+        }
+    }
 }

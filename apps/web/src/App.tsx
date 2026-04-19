@@ -24,6 +24,9 @@ import VerifyEmail from "./pages/VerifyEmail.tsx";
 import ForgotPassword from "./pages/ForgotPassword.tsx";
 import ResetPassword from "./pages/ResetPassword.tsx";
 import SecuritySettings from "./pages/SecuritySettings.tsx";
+import RiderLogin from "./pages/RiderLogin.tsx";
+import RiderDashboard from "./pages/RiderDashboard.tsx";
+import RiderProtectedRoute from "./components/RiderProtectedRoute.tsx";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -55,9 +58,9 @@ const App = () => (
 
               {/* Public route - table booking with floor plan */}
               <Route path="/book" element={
-                <ProtectedRoute>
+
                   <TableBooking />
-                </ProtectedRoute>
+
               } />
               <Route path="/delivery" element={
                 <ProtectedRoute>
@@ -90,6 +93,14 @@ const App = () => (
                 <AdminProtectedRoute>
                   <Admin />
                 </AdminProtectedRoute>
+              } />
+
+              {/* Rider Routes */}
+              <Route path="/rider/login" element={<RiderLogin />} />
+              <Route path="/rider/dashboard" element={
+                <RiderProtectedRoute>
+                  <RiderDashboard />
+                </RiderProtectedRoute>
               } />
               <Route path="/checkout" element={
                 <ProtectedRoute>

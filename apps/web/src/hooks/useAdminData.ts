@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { adminApi, menuApi, adminReviewsApi, adminAnnouncementsApi, Order } from "@/lib/api";
 import { toast } from "sonner";
 
-// Orders
+// Orders - with real-time polling
 export function useAdminOrders() {
   return useQuery({
     queryKey: ["admin", "orders"],
@@ -11,8 +11,11 @@ export function useAdminOrders() {
       if (error) throw new Error(error);
       return data || [];
     },
-    staleTime: 30 * 1000, // 30 seconds - orders need to be relatively fresh
+    staleTime: 0, // Always consider data stale for real-time updates
     gcTime: 5 * 60 * 1000, // 5 minutes cache
+    refetchInterval: 3000, // Poll every 3 seconds for real-time updates
+    refetchIntervalInBackground: true, // Continue polling even when tab is not focused
+    refetchOnWindowFocus: true, // Refetch immediately when user returns to tab
   });
 }
 
@@ -102,7 +105,8 @@ export function useRiders() {
       if (error) throw new Error(error);
       return data || [];
     },
-    staleTime: 2 * 60 * 1000, // 2 minutes
+    staleTime: 10 * 1000, // 10 seconds - rider availability changes frequently
+    refetchInterval: 15 * 1000, // Auto-refresh every 15 seconds
   });
 }
 

@@ -73,7 +73,8 @@ function OrderTimeline({ order }: { order: Order }) {
   );
 }
 
-const POLLING_INTERVAL = 30000; // 30 seconds
+const ACTIVE_POLLING_INTERVAL = 5000; // 5 seconds for active orders
+const IDLE_POLLING_INTERVAL = 30000; // 30 seconds when all orders complete
 
 export default function Orders() {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -89,16 +90,26 @@ export default function Orders() {
   const { addItems } = useCart();
   const navigate = useNavigate();
 
+  // Check if there are active (non-completed) orders
+  const hasActiveOrders = orders.some(order => {
+    const status = normalizeStatus(order.status);
+    return status !== 'delivered' && status !== 'cancelled';
+  });
+
   useEffect(() => {
     fetchOrders();
-
-    // Set up polling for real-time updates
-    const interval = setInterval(() => {
-      fetchOrders(true); // silent refresh
-    }, POLLING_INTERVAL);
-
-    return () => clearInterval(interval);
   }, []);
+
+  // Set up polling with dynamic interval based on active orders
+  useEffect(() => {
+    const interval = hasActiveOrders ? ACTIVE_POLLING_INTERVAL : IDLE_POLLING_INTERVAL;
+
+    const pollInterval = setInterval(() => {
+      fetchOrders(true); // silent refresh
+    }, interval);
+
+    return () => clearInterval(pollInterval);
+  }, [hasActiveOrders]);
 
   const fetchOrders = async (silent = false) => {
     if (!silent) setLoading(true);
@@ -288,7 +299,11 @@ export default function Orders() {
                             <MapPin className="h-3 w-3" />
                             Live Rider Tracking
                           </h4>
-                          <RiderTracker orderId={order.id} />
+                          <RiderTracker
+                            orderId={order.id}
+                            deliveryLat={order.deliveryLatitude}
+                            deliveryLng={order.deliveryLongitude}
+                          />
                         </div>
                       )}
 

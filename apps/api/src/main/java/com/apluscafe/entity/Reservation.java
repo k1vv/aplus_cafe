@@ -51,6 +51,10 @@ public class Reservation {
 
     private String contactPhone;
 
+    @Column(columnDefinition = "BOOLEAN DEFAULT FALSE")
+    @Builder.Default
+    private Boolean reminderSent = false;
+
     @CreationTimestamp
     private LocalDateTime createdAt;
 }

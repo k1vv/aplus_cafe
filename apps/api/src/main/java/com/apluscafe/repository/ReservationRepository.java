@@ -28,4 +28,9 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
            "AND r.status NOT IN ('CANCELLED', 'COMPLETED') " +
            "AND ((r.startTime <= ?3 AND r.endTime > ?3) OR (r.startTime < ?4 AND r.endTime >= ?4) OR (r.startTime >= ?3 AND r.endTime <= ?4))")
     List<Reservation> findConflictingReservations(Long tableId, LocalDate date, LocalTime startTime, LocalTime endTime);
+
+    // Find reservations for tomorrow that haven't received reminders yet
+    @Query("SELECT r FROM Reservation r WHERE r.reservationDate = ?1 " +
+           "AND r.status = 'CONFIRMED' AND r.reminderSent = false")
+    List<Reservation> findReservationsNeedingReminder(LocalDate date);
 }

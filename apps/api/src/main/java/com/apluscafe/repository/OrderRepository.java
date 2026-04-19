@@ -31,5 +31,9 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     @Query("SELECT DISTINCT o FROM Order o LEFT JOIN FETCH o.orderItems oi LEFT JOIN FETCH oi.menu LEFT JOIN FETCH o.delivery LEFT JOIN FETCH o.user WHERE o.status NOT IN ('DELIVERED', 'CANCELLED') ORDER BY o.createdAt ASC")
     List<Order> findActiveOrders();
 
+    // Get ALL orders including delivered and cancelled (for admin order history)
+    @Query("SELECT DISTINCT o FROM Order o LEFT JOIN FETCH o.orderItems oi LEFT JOIN FETCH oi.menu LEFT JOIN FETCH o.delivery LEFT JOIN FETCH o.user ORDER BY o.createdAt DESC")
+    List<Order> findAllOrdersWithDetails();
+
     List<Order> findByCreatedAtBetween(LocalDateTime start, LocalDateTime end);
 }

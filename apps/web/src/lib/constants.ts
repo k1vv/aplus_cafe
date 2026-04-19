@@ -1,7 +1,7 @@
 // APlus Cafe - Shop Location (UNITEN MZ D Tasek Hall)
 export const SHOP_LOCATION = {
-  lat: 2.9772,
-  lng: 101.731,
+  lat: 2.971129102928657,
+  lng: 101.73187506821965,
   name: "APlus Cafe",
   address: "MZ D Tasek Hall, UNITEN, Kajang, Selangor",
 };
