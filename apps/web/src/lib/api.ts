@@ -23,6 +23,10 @@ async function handleResponse<T>(response: Response): Promise<ApiResponse<T>> {
     const error = await response.text();
     return { error: error || response.statusText };
   }
+  // Handle 204 No Content
+  if (response.status === 204) {
+    return { data: undefined };
+  }
   const data = await response.json();
   return { data };
 }
@@ -61,6 +65,16 @@ export const api = {
       method: 'DELETE',
       credentials: 'include',
       headers: getAuthHeaders(),
+    });
+    return handleResponse<T>(response);
+  },
+
+  patch: async <T>(endpoint: string, body?: unknown): Promise<ApiResponse<T>> => {
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      method: 'PATCH',
+      credentials: 'include',
+      headers: getAuthHeaders(),
+      body: body ? JSON.stringify(body) : undefined,
     });
     return handleResponse<T>(response);
   },
@@ -133,12 +147,41 @@ export const ordersApi = {
 
   cancelOrder: (id: string) =>
     api.put<Order>(`/orders/${id}/cancel`, {}),
+
+  downloadReceipt: async (id: string): Promise<{ error?: string }> => {
+    try {
+      const token = localStorage.getItem('aplus_auth_token');
+      const response = await fetch(`${API_BASE_URL}/orders/${id}/receipt`, {
+        credentials: 'include',
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+      });
+
+      if (!response.ok) {
+        return { error: 'Failed to download receipt' };
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `receipt-order-${id}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      return {};
+    } catch {
+      return { error: 'Failed to download receipt' };
+    }
+  },
 };
 
 // Checkout API endpoints
 export const checkoutApi = {
   createCheckoutSession: (data: CreateCheckoutRequest) =>
     api.post<{ clientSecret: string }>('/checkout/create-session', data),
+  confirmPayment: (sessionId: string) =>
+    api.post<void>('/checkout/confirm', { sessionId }),
 };
 
 // Menu API endpoints
@@ -158,9 +201,17 @@ export interface User {
   id: string;
   email: string;
   fullName?: string;
+  phone?: string;
   role?: 'USER' | 'ADMIN';
   emailVerified?: boolean;
   twoFactorEnabled?: boolean;
+  deliveryAddress?: SavedDeliveryAddress;
+}
+
+export interface SavedDeliveryAddress {
+  address: string;
+  lat: number;
+  lng: number;
 }
 
 export interface MenuItemResponse {
@@ -196,12 +247,17 @@ export interface Order {
   serviceCharge: number;
   deliveryFee: number;
   estimatedDeliveryMinutes: number;
+  notes?: string;
+  orderType?: 'DELIVERY' | 'PICKUP' | 'DINE_IN';
   confirmedAt: string | null;
   preparingAt: string | null;
+  readyAt: string | null;
   outForDeliveryAt: string | null;
   deliveredAt: string | null;
   createdAt: string;
   orderItems: OrderItem[];
+  customerName?: string;
+  customerEmail?: string;
 }
 
 export interface CreateOrderRequest {
@@ -288,7 +344,20 @@ export const userApi = {
     api.put<Address>(`/users/addresses/${id}`, data),
 
   deleteAddress: (id: string) => api.delete(`/users/addresses/${id}`),
+
+  // Delivery address with coordinates
+  saveDeliveryAddress: (data: SaveDeliveryAddressRequest) =>
+    api.put<User>('/users/delivery-address', data),
+
+  getDeliveryAddress: () =>
+    api.get<SavedDeliveryAddress>('/users/delivery-address'),
 };
+
+export interface SaveDeliveryAddressRequest {
+  address: string;
+  lat: number;
+  lng: number;
+}
 
 export interface UserProfile {
   id: string;
@@ -320,8 +389,50 @@ export interface CreateAddressRequest {
   isDefault?: boolean;
 }
 
+// Analytics types
+export interface AnalyticsResponse {
+  overview: {
+    todayRevenue: number;
+    weekRevenue: number;
+    monthRevenue: number;
+    todayOrders: number;
+    weekOrders: number;
+    monthOrders: number;
+    pendingOrders: number;
+    activeDeliveries: number;
+  };
+  revenueChart: {
+    date: string;
+    revenue: number;
+    orders: number;
+  }[];
+  popularItems: {
+    id: number;
+    name: string;
+    imageUrl: string;
+    orderCount: number;
+    revenue: number;
+  }[];
+  ordersByStatus: {
+    status: string;
+    count: number;
+  }[];
+  recentOrders: {
+    id: number;
+    customerName: string;
+    total: number;
+    status: string;
+    orderType: string;
+    createdAt: string;
+    itemCount: number;
+  }[];
+}
+
 // Admin API endpoints
 export const adminApi = {
+  // Analytics
+  getAnalytics: () => api.get<AnalyticsResponse>('/admin/analytics'),
+
   // Menu management
   getMenuItems: () => api.get<MenuItemResponse[]>('/admin/menu'),
   createMenuItem: (data: CreateMenuItemRequest) => api.post<MenuItemResponse>('/admin/menu', data),
@@ -331,18 +442,18 @@ export const adminApi = {
   // Orders management
   getAllOrders: () => api.get<Order[]>('/admin/orders'),
   updateOrderStatus: (id: string, status: string) =>
-    api.put(`/admin/orders/${id}/status`, { status }),
+    api.patch(`/admin/orders/${id}/status`, { status }),
 
   // Reservations management
   getAllReservations: (date?: string) =>
     api.get<Reservation[]>(`/admin/reservations${date ? `?date=${date}` : ''}`),
   updateReservationStatus: (id: string, status: string) =>
-    api.put(`/admin/reservations/${id}/status`, { status }),
+    api.patch(`/admin/reservations/${id}/status`, { status }),
 
   // Users management
   getAllUsers: () => api.get<AdminUser[]>('/admin/users'),
   toggleUserActive: (id: string, active: boolean) =>
-    api.put(`/admin/users/${id}/active`, { active }),
+    api.patch(`/admin/users/${id}/active`, { active }),
 };
 
 export interface CreateMenuItemRequest {
@@ -363,3 +474,129 @@ export interface AdminUser {
   isActive: boolean;
   createdAt: string;
 }
+
+// Promo Code types
+export interface PromoValidationResponse {
+  valid: boolean;
+  code?: string;
+  description?: string;
+  discountType?: string;
+  discountValue?: number;
+  discountAmount?: number;
+  errorMessage?: string;
+}
+
+export interface PromoCode {
+  id: number;
+  code: string;
+  description?: string;
+  discountType: 'PERCENTAGE' | 'FIXED_AMOUNT';
+  discountValue: number;
+  minimumOrderAmount?: number;
+  maximumDiscount?: number;
+  usageLimit?: number;
+  usedCount?: number;
+  validFrom?: string;
+  validUntil?: string;
+  isActive: boolean;
+  createdAt: string;
+}
+
+// Promo API endpoints
+export const promoApi = {
+  validate: (code: string, subtotal: number) =>
+    api.post<PromoValidationResponse>('/promo/validate', { code, subtotal }),
+};
+
+// Favorites API endpoints
+export const favoritesApi = {
+  getFavorites: () => api.get<MenuItemResponse[]>('/users/favorites'),
+  getFavoriteIds: () => api.get<number[]>('/users/favorites/ids'),
+  toggleFavorite: (menuId: number) =>
+    api.post<{ isFavorite: boolean }>(`/users/favorites/${menuId}`),
+};
+
+// Review types
+export interface Review {
+  id: number;
+  orderId: number;
+  userId: number;
+  userName: string;
+  rating: number;
+  comment?: string;
+  adminResponse?: string;
+  adminRespondedAt?: string;
+  createdAt: string;
+}
+
+export interface ReviewStats {
+  averageRating: number;
+  totalReviews: number;
+  fiveStarCount: number;
+  fourStarCount: number;
+  threeStarCount: number;
+  twoStarCount: number;
+  oneStarCount: number;
+}
+
+// Reviews API endpoints
+export const reviewsApi = {
+  getMyReviews: () => api.get<Review[]>('/users/reviews'),
+  getOrderReview: (orderId: string) => api.get<Review>(`/users/orders/${orderId}/review`),
+  canReview: (orderId: string) => api.get<{ canReview: boolean }>(`/users/orders/${orderId}/can-review`),
+  createReview: (orderId: number, rating: number, comment?: string) =>
+    api.post<Review>('/users/reviews', { orderId, rating, comment }),
+};
+
+// Announcement types
+export interface Announcement {
+  id: number;
+  title: string;
+  content: string;
+  imageUrl?: string;
+  startDate?: string;
+  endDate?: string;
+  isActive: boolean;
+  createdAt: string;
+}
+
+// Admin Reviews and Announcements API
+export const adminReviewsApi = {
+  getAllReviews: () => api.get<Review[]>('/admin/reviews'),
+  getReviewStats: () => api.get<ReviewStats>('/admin/reviews/stats'),
+  respondToReview: (id: number, response: string) =>
+    api.post<Review>(`/admin/reviews/${id}/respond`, { response }),
+};
+
+export const adminAnnouncementsApi = {
+  getAll: () => api.get<Announcement[]>('/admin/announcements'),
+  create: (data: Omit<Announcement, 'id' | 'createdAt' | 'isActive'>) =>
+    api.post<Announcement>('/admin/announcements', data),
+  update: (id: number, data: Partial<Announcement>) =>
+    api.put<Announcement>(`/admin/announcements/${id}`, data),
+  delete: (id: number) => api.delete(`/admin/announcements/${id}`),
+};
+
+// Admin Auth types and API
+export interface AdminUser {
+  id: number;
+  username: string;
+  email: string;
+  fullName: string;
+  isSuperAdmin: boolean;
+}
+
+export interface AdminAuthResponse {
+  accessToken: string;
+  admin: AdminUser;
+}
+
+export const adminAuthApi = {
+  login: (usernameOrEmail: string, password: string) =>
+    api.post<AdminAuthResponse>('/admin/auth/login', { usernameOrEmail, password }),
+
+  getMe: () => api.get<AdminUser>('/admin/auth/me'),
+
+  changePassword: (currentPassword: string, newPassword: string) =>
+    api.post<{ message: string }>('/admin/auth/change-password', { currentPassword, newPassword }),
+};

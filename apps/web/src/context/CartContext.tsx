@@ -4,6 +4,7 @@ import { MenuItem, CartItem } from "@/data/menuData";
 interface CartContextType {
   items: CartItem[];
   addItem: (item: MenuItem) => void;
+  addItems: (items: { id: string; name: string; price: number; quantity: number }[]) => void;
   removeItem: (id: string) => void;
   updateQuantity: (id: string, quantity: number) => void;
   clearCart: () => void;
@@ -33,6 +34,30 @@ export function CartProvider({ children }: { children: ReactNode }) {
     setCartBadgeKey((prev) => prev + 1);
   }, []);
 
+  const addItems = useCallback((newItems: { id: string; name: string; price: number; quantity: number }[]) => {
+    setItems((prev) => {
+      const updated = [...prev];
+      for (const item of newItems) {
+        const existingIdx = updated.findIndex((i) => i.id === item.id);
+        if (existingIdx >= 0) {
+          updated[existingIdx] = { ...updated[existingIdx], quantity: updated[existingIdx].quantity + item.quantity };
+        } else {
+          updated.push({
+            id: item.id,
+            name: item.name,
+            price: item.price,
+            quantity: item.quantity,
+            image: "",
+            description: "",
+            category: "",
+          });
+        }
+      }
+      return updated;
+    });
+    setCartBadgeKey((prev) => prev + 1);
+  }, []);
+
   const removeItem = useCallback((id: string) => {
     setItems((prev) => prev.filter((i) => i.id !== id));
   }, []);
@@ -51,7 +76,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const totalPrice = items.reduce((sum, i) => sum + i.price * i.quantity, 0);
 
   return (
-    <CartContext.Provider value={{ items, addItem, removeItem, updateQuantity, clearCart, totalItems, totalPrice, isCartOpen, setIsCartOpen, cartBadgeKey }}>
+    <CartContext.Provider value={{ items, addItem, addItems, removeItem, updateQuantity, clearCart, totalItems, totalPrice, isCartOpen, setIsCartOpen, cartBadgeKey }}>
       {children}
     </CartContext.Provider>
   );

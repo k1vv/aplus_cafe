@@ -38,5 +38,6 @@ public class CreateOrderRequest {
         private String address;
         private String phone;
         private String notes;
+        private Boolean contactless = false;
     }
 }

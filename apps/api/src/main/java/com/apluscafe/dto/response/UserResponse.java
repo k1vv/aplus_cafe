@@ -20,8 +20,28 @@ public class UserResponse {
     private UserRole role;
     private Boolean emailVerified;
     private Boolean twoFactorEnabled;
+    private DeliveryAddress deliveryAddress;
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class DeliveryAddress {
+        private String address;
+        private Double lat;
+        private Double lng;
+    }
 
     public static UserResponse fromEntity(User user) {
+        DeliveryAddress deliveryAddr = null;
+        if (user.getDeliveryAddress() != null && user.getDeliveryLat() != null && user.getDeliveryLng() != null) {
+            deliveryAddr = DeliveryAddress.builder()
+                    .address(user.getDeliveryAddress())
+                    .lat(user.getDeliveryLat())
+                    .lng(user.getDeliveryLng())
+                    .build();
+        }
+
         return UserResponse.builder()
                 .id(user.getId())
                 .email(user.getEmail())
@@ -30,6 +50,7 @@ public class UserResponse {
                 .role(user.getRole())
                 .emailVerified(user.getEmailVerified())
                 .twoFactorEnabled(user.getTwoFactorEnabled())
+                .deliveryAddress(deliveryAddr)
                 .build();
     }
 }

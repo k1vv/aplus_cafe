@@ -3,9 +3,9 @@ spring:
     name: aplus-cafe-api
 
   datasource:
-    url: jdbc:postgresql://localhost:5432/aplus_cafe
-    username: postgres
-    password: postgres
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/aplus_cafe}
+    username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    password: ${SPRING_DATASOURCE_PASSWORD:postgres}
     driver-class-name: org.postgresql.Driver
 
   jpa:
@@ -16,6 +16,11 @@ spring:
       hibernate:
         format_sql: false
         dialect: org.hibernate.dialect.PostgreSQLDialect
+    defer-datasource-initialization: true
+
+  sql:
+    init:
+      mode: always
 
   # Email Configuration
   # Option 1 - Mailtrap (for development/testing): https://mailtrap.io

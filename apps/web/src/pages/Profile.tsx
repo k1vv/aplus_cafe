@@ -1,15 +1,15 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { ArrowLeft, User, Mail, Phone, MapPin, Plus, Trash2, Edit2, Check, X, Star } from "lucide-react";
+import { ArrowLeft, User, Mail, Phone, MapPin, Plus, Trash2, Edit2, Check, X, Star, Truck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/context/AuthContext";
-import { userApi, Address, reservationsApi, Reservation } from "@/lib/api";
+import { userApi, Address, reservationsApi, Reservation, SavedDeliveryAddress } from "@/lib/api";
 import { toast } from "sonner";
 import { format } from "date-fns";
 
 export default function Profile() {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const [fullName, setFullName] = useState(user?.fullName || "");
   const [phone, setPhone] = useState("");
   const [editingProfile, setEditingProfile] = useState(false);
@@ -21,13 +21,29 @@ export default function Profile() {
   const [newAddress, setNewAddress] = useState({ label: "", street: "", city: "", postalCode: "" });
   const [savingAddress, setSavingAddress] = useState(false);
 
+  // Delivery address (saved from checkout)
+  const [deliveryAddress, setDeliveryAddress] = useState<SavedDeliveryAddress | null>(null);
+  const [loadingDeliveryAddress, setLoadingDeliveryAddress] = useState(true);
+
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [loadingReservations, setLoadingReservations] = useState(true);
 
   useEffect(() => {
     fetchAddresses();
+    fetchDeliveryAddress();
     fetchReservations();
   }, []);
+
+  const fetchDeliveryAddress = async () => {
+    setLoadingDeliveryAddress(true);
+    try {
+      const { data } = await userApi.getDeliveryAddress();
+      if (data) setDeliveryAddress(data);
+    } catch (error) {
+      console.error("Failed to fetch delivery address:", error);
+    }
+    setLoadingDeliveryAddress(false);
+  };
 
   const fetchAddresses = async () => {
     setLoadingAddresses(true);
@@ -114,9 +130,11 @@ export default function Profile() {
             <ArrowLeft className="h-4 w-4" />
             <span className="hidden sm:inline">Back</span>
           </Link>
-          <h1 className="text-lg sm:text-xl md:text-2xl font-normal" style={{ fontFamily: "'DM Serif Display', serif" }}>
-            My Profile
-          </h1>
+          <Link to="/" className="absolute left-1/2 -translate-x-1/2">
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-normal" style={{ fontFamily: "'DM Serif Display', serif" }}>
+              APlus
+            </h1>
+          </Link>
           <div className="w-12 sm:w-16" />
         </div>
       </header>
@@ -185,6 +203,43 @@ export default function Profile() {
               </>
             )}
           </div>
+        </section>
+
+        {/* Delivery Address Section (saved from Checkout) */}
+        <section className="rounded-xl border border-border bg-card p-4 sm:p-6">
+          <h2 className="text-lg font-bold flex items-center gap-2 mb-4" style={{ fontFamily: "'DM Serif Display', serif" }}>
+            <Truck className="h-5 w-5 text-primary" />
+            Delivery Address
+          </h2>
+
+          {loadingDeliveryAddress ? (
+            <div className="flex justify-center py-8">
+              <div className="h-5 w-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : deliveryAddress ? (
+            <div className="p-3 rounded-lg bg-muted/30">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-xs font-bold uppercase tracking-wider">Saved Location</span>
+                <span className="text-[9px] px-1.5 py-0.5 rounded bg-success/10 text-success font-bold">
+                  Active
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground" style={{ fontFamily: "'Space Mono', monospace" }}>
+                {deliveryAddress.address}
+              </p>
+              <p className="text-[10px] text-muted-foreground/70 mt-1" style={{ fontFamily: "'Space Mono', monospace" }}>
+                Coordinates: {deliveryAddress.lat.toFixed(6)}, {deliveryAddress.lng.toFixed(6)}
+              </p>
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <Truck className="mx-auto h-8 w-8 text-muted-foreground/30 mb-2" />
+              <p className="text-xs text-muted-foreground">No delivery address saved</p>
+              <p className="text-[10px] text-muted-foreground/70 mt-1" style={{ fontFamily: "'Space Mono', monospace" }}>
+                Save your delivery location during checkout
+              </p>
+            </div>
+          )}
         </section>
 
         {/* Addresses Section */}

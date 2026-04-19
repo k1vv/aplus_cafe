@@ -1,0 +1,45 @@
+# Render Blueprint - Backend Service Configuration
+# https://render.com/docs/blueprint-spec
+
+services:
+  - type: web
+    name: aplus-cafe-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: free
+    region: oregon
+    healthCheckPath: /actuator/health
+    envVars:
+      # Database (Neon PostgreSQL)
+      - key: SPRING_DATASOURCE_URL
+        sync: false
+      - key: SPRING_DATASOURCE_USERNAME
+        sync: false
+      - key: SPRING_DATASOURCE_PASSWORD
+        sync: false
+      # JWT Secret
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      # Stripe
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      # Email (Mailtrap or Gmail)
+      - key: MAIL_HOST
+        sync: false
+      - key: MAIL_PORT
+        sync: false
+      - key: MAIL_USERNAME
+        sync: false
+      - key: MAIL_PASSWORD
+        sync: false
+      - key: MAIL_FROM
+        value: noreply@aplus.cafe
+      # Frontend URL for CORS
+      - key: FRONTEND_URL
+        sync: false
+      # Java Options for free tier (512MB RAM)
+      - key: JAVA_OPTS
+        value: "-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -Xmx384m"

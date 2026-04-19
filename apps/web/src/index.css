@@ -228,3 +228,67 @@
 .cart-badge-bounce {
   animation: cartBounce 0.5s ease-out;
 }
+
+/* Order summary item animations */
+@keyframes cartItemSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes cartItemPulse {
+  0% {
+    background-color: transparent;
+  }
+  50% {
+    background-color: hsl(var(--primary) / 0.15);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+@keyframes totalPop {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes summaryGlow {
+  0% {
+    box-shadow: 0 0 0 0 hsl(var(--primary) / 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 10px hsl(var(--primary) / 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 hsl(var(--primary) / 0);
+  }
+}
+
+.cart-item-enter {
+  animation: cartItemSlideIn 0.3s ease-out;
+}
+
+.cart-item-pulse {
+  animation: cartItemPulse 0.4s ease-out;
+}
+
+.total-pop {
+  animation: totalPop 0.3s ease-out;
+}
+
+.summary-glow {
+  animation: summaryGlow 0.6s ease-out;
+}

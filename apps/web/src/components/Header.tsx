@@ -9,6 +9,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import ThemeToggle from "@/components/ThemeToggle";
 
 export default function Header() {
   const { totalItems, setIsCartOpen, cartBadgeKey } = useCart();
@@ -85,6 +86,7 @@ export default function Header() {
               <span className="hidden sm:inline">Sign In</span>
             </Link>
           )}
+          <ThemeToggle className="text-primary-foreground hover:text-primary-foreground/70" />
           <button
             onClick={() => setIsCartOpen(true)}
             className="flex items-center gap-1.5 sm:gap-2 text-[10px] sm:text-xs font-medium uppercase tracking-[0.1em] sm:tracking-[0.2em] hover:opacity-70 transition-opacity relative"

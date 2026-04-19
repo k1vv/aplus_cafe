@@ -55,6 +55,11 @@ public class User {
 
     private String twoFactorSecret;
 
+    // Saved delivery address with coordinates
+    private String deliveryAddress;
+    private Double deliveryLat;
+    private Double deliveryLng;
+
     @CreationTimestamp
     private LocalDateTime createdAt;
 

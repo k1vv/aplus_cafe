@@ -51,6 +51,9 @@ public class Delivery {
     @Column(columnDefinition = "TEXT")
     private String deliveryNotes;
 
+    @Column(nullable = false)
+    private Boolean contactless = false;
+
     @CreationTimestamp
     private LocalDateTime createdAt;
 

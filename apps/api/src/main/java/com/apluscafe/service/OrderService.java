@@ -12,6 +12,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.apluscafe.controller.OrderTrackingController;
+
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -30,6 +32,8 @@ public class OrderService {
     private final AddressRepository addressRepository;
     private final DeliveryRepository deliveryRepository;
     private final RiderDetailsRepository riderDetailsRepository;
+    private final EmailService emailService;
+    private final NotificationService notificationService;
 
     private static final BigDecimal SERVICE_CHARGE_RATE = new BigDecimal("0.06"); // 6%
     private static final BigDecimal DELIVERY_FEE = new BigDecimal("5.00");
@@ -118,7 +122,42 @@ public class OrderService {
             createDeliveryForOrder(order, request.getDeliveryDetails());
         }
 
+        // Send order receipt email
+        sendOrderReceiptEmail(user, order, orderItems);
+
         return OrderResponse.fromEntity(order);
+    }
+
+    private void sendOrderReceiptEmail(User user, Order order, List<OrderItem> orderItems) {
+        try {
+            List<EmailService.OrderItemInfo> itemInfos = orderItems.stream()
+                    .map(item -> new EmailService.OrderItemInfo(
+                            item.getMenu().getName(),
+                            item.getQuantity(),
+                            item.getUnitPrice(),
+                            item.getSubtotal()))
+                    .toList();
+
+            String deliveryAddress = order.getDeliveryAddress() != null
+                    ? order.getDeliveryAddress().getAddressLine()
+                    : "";
+
+            emailService.sendOrderReceiptEmail(
+                    user.getEmail(),
+                    user.getFullName(),
+                    order.getId(),
+                    itemInfos,
+                    order.getSubtotal(),
+                    order.getServiceCharge(),
+                    order.getDeliveryFee(),
+                    order.getTotalAmount(),
+                    order.getOrderType().name(),
+                    deliveryAddress
+            );
+            log.info("Order receipt email sent for order ID: {}", order.getId());
+        } catch (Exception e) {
+            log.error("Failed to send order receipt email for order ID: {}", order.getId(), e);
+        }
     }
 
     private void createDeliveryForOrder(Order order, CreateOrderRequest.DeliveryDetailsRequest deliveryDetails) {
@@ -128,15 +167,20 @@ public class OrderService {
                 ? order.getDeliveryAddress().getAddressLine()
                 : (deliveryDetails != null ? deliveryDetails.getAddress() : "");
 
+        Boolean contactless = deliveryDetails != null && deliveryDetails.getContactless() != null
+                ? deliveryDetails.getContactless()
+                : false;
+
         Delivery delivery = Delivery.builder()
                 .order(order)
                 .deliveryAddress(address)
                 .status(DeliveryStatus.PENDING_ASSIGNMENT)
                 .deliveryNotes(deliveryDetails != null ? deliveryDetails.getNotes() : null)
+                .contactless(contactless)
                 .build();
 
         deliveryRepository.save(delivery);
-        log.info("Delivery record created for order ID: {}, status: PENDING_ASSIGNMENT", order.getId());
+        log.info("Delivery record created for order ID: {}, status: PENDING_ASSIGNMENT, contactless: {}", order.getId(), contactless);
     }
 
     public List<OrderResponse> getUserOrders(Long userId) {
@@ -151,7 +195,7 @@ public class OrderService {
     public OrderResponse getOrder(Long orderId, Long userId) {
         log.debug("Fetching order ID: {} for user ID: {}", orderId, userId);
 
-        Order order = orderRepository.findById(orderId)
+        Order order = orderRepository.findByIdWithItems(orderId)
                 .orElseThrow(() -> {
                     log.warn("Order not found: {}", orderId);
                     return new RuntimeException("Order not found");
@@ -170,7 +214,7 @@ public class OrderService {
     public OrderResponse updateOrderStatus(Long orderId, OrderStatus status) {
         log.info("Updating order {} status to: {}", orderId, status);
 
-        Order order = orderRepository.findById(orderId)
+        Order order = orderRepository.findByIdWithItems(orderId)
                 .orElseThrow(() -> {
                     log.error("Order not found for status update: {}", orderId);
                     return new RuntimeException("Order not found");
@@ -195,6 +239,13 @@ public class OrderService {
 
         order = orderRepository.save(order);
         log.info("Order {} status updated successfully to: {}", orderId, status);
+
+        // Broadcast real-time update to connected clients
+        OrderTrackingController.broadcastOrderUpdate(order);
+
+        // Send push notification
+        notificationService.sendOrderStatusNotification(order, status);
+
         return OrderResponse.fromEntity(order);
     }
 
@@ -239,5 +290,42 @@ public class OrderService {
                 .collect(Collectors.toList());
         log.debug("Found {} active orders", orders.size());
         return orders;
+    }
+
+    @Transactional
+    public OrderResponse cancelOrder(Long orderId, Long userId) {
+        log.info("Cancelling order {} for user {}", orderId, userId);
+
+        Order order = orderRepository.findByIdWithItems(orderId)
+                .orElseThrow(() -> {
+                    log.error("Order not found for cancellation: {}", orderId);
+                    return new RuntimeException("Order not found");
+                });
+
+        // Verify ownership
+        if (!order.getUser().getId().equals(userId)) {
+            log.warn("User {} attempted to cancel order {} belonging to user {}",
+                    userId, orderId, order.getUser().getId());
+            throw new RuntimeException("Order not found");
+        }
+
+        // Only allow cancellation of pending or confirmed orders
+        if (order.getStatus() != OrderStatus.PENDING && order.getStatus() != OrderStatus.CONFIRMED) {
+            log.warn("Cannot cancel order {} with status {}", orderId, order.getStatus());
+            throw new RuntimeException("Cannot cancel order - it's already being prepared or delivered");
+        }
+
+        order.setStatus(OrderStatus.CANCELLED);
+        order.setCancelledAt(LocalDateTime.now());
+        order = orderRepository.save(order);
+
+        // Cancel delivery if exists
+        deliveryRepository.findByOrderId(orderId).ifPresent(delivery -> {
+            delivery.setStatus(DeliveryStatus.CANCELLED);
+            deliveryRepository.save(delivery);
+        });
+
+        log.info("Order {} cancelled successfully", orderId);
+        return OrderResponse.fromEntity(order);
     }
 }

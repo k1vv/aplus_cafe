@@ -1,8 +1,11 @@
 package com.apluscafe.controller;
 
+import com.apluscafe.dto.response.AnalyticsResponse;
 import com.apluscafe.dto.response.MenuResponse;
 import com.apluscafe.dto.response.OrderResponse;
 import com.apluscafe.dto.response.ReservationResponse;
+import com.apluscafe.dto.response.ReviewResponse;
+import com.apluscafe.dto.response.ReviewStatsResponse;
 import com.apluscafe.dto.response.UserResponse;
 import com.apluscafe.entity.Announcement;
 import com.apluscafe.entity.User;
@@ -10,10 +13,12 @@ import com.apluscafe.enums.OrderStatus;
 import com.apluscafe.enums.ReservationStatus;
 import com.apluscafe.repository.UserRepository;
 import com.apluscafe.security.UserDetailsImpl;
+import com.apluscafe.service.AnalyticsService;
 import com.apluscafe.service.AnnouncementService;
 import com.apluscafe.service.MenuService;
 import com.apluscafe.service.OrderService;
 import com.apluscafe.service.ReservationService;
+import com.apluscafe.service.ReviewService;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -38,7 +43,15 @@ public class AdminController {
     private final OrderService orderService;
     private final ReservationService reservationService;
     private final AnnouncementService announcementService;
+    private final AnalyticsService analyticsService;
     private final UserRepository userRepository;
+    private final ReviewService reviewService;
+
+    // Analytics
+    @GetMapping("/analytics")
+    public ResponseEntity<AnalyticsResponse> getAnalytics() {
+        return ResponseEntity.ok(analyticsService.getAnalytics());
+    }
 
     // Menu Management
     @GetMapping("/menu")
@@ -164,6 +177,24 @@ public class AdminController {
         return ResponseEntity.ok().build();
     }
 
+    // Review Management
+    @GetMapping("/reviews")
+    public ResponseEntity<List<ReviewResponse>> getAllReviews() {
+        return ResponseEntity.ok(reviewService.getAllReviews());
+    }
+
+    @GetMapping("/reviews/stats")
+    public ResponseEntity<ReviewStatsResponse> getReviewStats() {
+        return ResponseEntity.ok(reviewService.getReviewStats());
+    }
+
+    @PostMapping("/reviews/{id}/respond")
+    public ResponseEntity<ReviewResponse> respondToReview(
+            @PathVariable Long id,
+            @RequestBody ReviewResponseRequest request) {
+        return ResponseEntity.ok(reviewService.respondToReview(id, request.getResponse()));
+    }
+
     // Request DTOs
     @Data
     static class CreateMenuRequest {
@@ -211,5 +242,10 @@ public class AdminController {
         private LocalDateTime startDate;
         private LocalDateTime endDate;
         private Boolean isActive;
+    }
+
+    @Data
+    static class ReviewResponseRequest {
+        private String response;
     }
 }

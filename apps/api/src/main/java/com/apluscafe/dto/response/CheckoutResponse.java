@@ -13,4 +13,5 @@ public class CheckoutResponse {
 
     private String sessionId;
     private String sessionUrl;
+    private String clientSecret;
 }

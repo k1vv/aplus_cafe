@@ -1,5 +1,6 @@
 package com.apluscafe.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -27,6 +28,7 @@ public class Category {
     @Column(nullable = false)
     private Integer displayOrder = 0;
 
+    @JsonIgnore
     @OneToMany(mappedBy = "category", cascade = CascadeType.ALL)
     private List<Menu> menuItems = new ArrayList<>();
 }

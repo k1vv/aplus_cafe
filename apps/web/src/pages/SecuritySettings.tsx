@@ -83,9 +83,11 @@ export default function SecuritySettings() {
             <ArrowLeft className="h-4 w-4" />
             Profile
           </Link>
-          <h1 className="text-xl sm:text-2xl font-normal" style={{ fontFamily: "'DM Serif Display', serif" }}>
-            Security
-          </h1>
+          <Link to="/" className="absolute left-1/2 -translate-x-1/2">
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-normal" style={{ fontFamily: "'DM Serif Display', serif" }}>
+              APlus
+            </h1>
+          </Link>
           <div className="w-16" />
         </div>
       </header>

@@ -1,5 +1,5 @@
-# Build stage
-FROM maven:3.9-eclipse-temurin-17-alpine AS builder
+# Build stage - Use non-Alpine for better Lombok compatibility
+FROM maven:3.9-eclipse-temurin-17 AS builder
 
 WORKDIR /app
 

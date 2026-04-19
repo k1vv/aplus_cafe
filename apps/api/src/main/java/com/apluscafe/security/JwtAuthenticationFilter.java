@@ -32,19 +32,31 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             @NonNull FilterChain filterChain
     ) throws ServletException, IOException {
         final String authHeader = request.getHeader("Authorization");
-        final String jwt;
+        String jwt = null;
         final String userEmail;
 
         String requestPath = request.getRequestURI();
         log.trace("Processing request: {} {}", request.getMethod(), requestPath);
 
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+        // Check Authorization header first
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            jwt = authHeader.substring(7);
+        }
+
+        // For SSE endpoints, also check query parameter (EventSource doesn't support custom headers)
+        if (jwt == null && requestPath.contains("/track")) {
+            jwt = request.getParameter("token");
+            if (jwt != null) {
+                log.trace("JWT token found in query parameter for SSE endpoint: {}", requestPath);
+            }
+        }
+
+        if (jwt == null) {
             log.trace("No Bearer token found for request: {}", requestPath);
             filterChain.doFilter(request, response);
             return;
         }
 
-        jwt = authHeader.substring(7);
         log.debug("JWT token found, attempting authentication for: {}", requestPath);
 
         try {

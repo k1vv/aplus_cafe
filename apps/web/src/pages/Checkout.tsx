@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { ArrowLeft, CreditCard, MapPin, Phone, User, Clock, Store, Truck, UtensilsCrossed } from "lucide-react";
+import { ArrowLeft, CreditCard, MapPin, Phone, User, Clock, Store, Truck, UtensilsCrossed, Save, Loader2, HandMetal } from "lucide-react";
 import { EmbeddedCheckoutProvider, EmbeddedCheckout } from "@stripe/react-stripe-js";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,8 +10,9 @@ import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
 import { PaymentTestModeBanner } from "@/components/PaymentTestModeBanner";
 import { getStripe } from "@/lib/stripe";
-import { checkoutApi } from "@/lib/api";
+import { checkoutApi, userApi } from "@/lib/api";
 import { toast } from "sonner";
+import LocationPicker from "@/components/LocationPicker";
 
 type OrderType = 'DELIVERY' | 'PICKUP' | 'DINE_IN';
 
@@ -35,7 +36,56 @@ export default function Checkout() {
     pickupTime: "",
     tableNumber: "",
     partySize: "1",
+    contactless: false,
   });
+
+  // Location picker state
+  const [selectedLocation, setSelectedLocation] = useState<{
+    lat: number;
+    lng: number;
+    address: string;
+    isWithinRange: boolean;
+  } | null>(null);
+  const [savedLocation, setSavedLocation] = useState<{
+    lat: number;
+    lng: number;
+    address: string;
+  } | null>(null);
+  const [saveAddress, setSaveAddress] = useState(false);
+  const [isSavingAddress, setIsSavingAddress] = useState(false);
+  const [isLoadingAddress, setIsLoadingAddress] = useState(false);
+
+  // Load saved delivery address on mount
+  useEffect(() => {
+    const loadSavedAddress = async () => {
+      if (user) {
+        setIsLoadingAddress(true);
+        try {
+          const { data } = await userApi.getDeliveryAddress();
+          if (data) {
+            setSavedLocation({
+              lat: data.lat,
+              lng: data.lng,
+              address: data.address,
+            });
+            // Auto-select saved location
+            setSelectedLocation({
+              lat: data.lat,
+              lng: data.lng,
+              address: data.address,
+              isWithinRange: true, // Will be validated by LocationPicker
+            });
+            setForm(prev => ({ ...prev, address: data.address }));
+          }
+        } catch (error) {
+          console.error("Failed to load saved address:", error);
+        } finally {
+          setIsLoadingAddress(false);
+        }
+      }
+    };
+    loadSavedAddress();
+  }, [user]);
 
   useEffect(() => {
     const savedOrderType = sessionStorage.getItem('orderType') as OrderType;
@@ -52,7 +102,36 @@ export default function Checkout() {
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
-  const handleProceedToPayment = (e: React.FormEvent) => {
+  const handleLocationSelect = (location: { lat: number; lng: number; address: string; isWithinRange: boolean }) => {
+    setSelectedLocation(location);
+    setForm(prev => ({ ...prev, address: location.address }));
+  };
+
+  const handleSaveAddress = async () => {
+    if (!selectedLocation || !user) return;
+
+    setIsSavingAddress(true);
+    try {
+      await userApi.saveDeliveryAddress({
+        address: selectedLocation.address,
+        lat: selectedLocation.lat,
+        lng: selectedLocation.lng,
+      });
+      setSavedLocation({
+        lat: selectedLocation.lat,
+        lng: selectedLocation.lng,
+        address: selectedLocation.address,
+      });
+      toast.success("Delivery address saved to your profile");
+    } catch (error) {
+      toast.error("Failed to save address");
+      console.error("Failed to save address:", error);
+    } finally {
+      setIsSavingAddress(false);
+    }
+  };
+
+  const handleProceedToPayment = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!form.name || !form.phone) {
@@ -60,19 +139,35 @@ export default function Checkout() {
       return;
     }
 
-    if (orderType === 'DELIVERY' && !form.address) {
-      toast.error("Please fill in your delivery address");
-      return;
+    if (orderType === 'DELIVERY') {
+      if (!selectedLocation) {
+        toast.error("Please select your delivery location on the map");
+        return;
+      }
+      if (!selectedLocation.isWithinRange) {
+        toast.error("Sorry, we cannot deliver to your location. Please select a location within our delivery area.");
+        return;
+      }
     }
 
     if (items.length === 0) {
       toast.error("Your cart is empty");
       return;
     }
+
+    // Save address if checkbox is checked
+    if (saveAddress && selectedLocation && user) {
+      await handleSaveAddress();
+    }
+
     setShowPayment(true);
   };
 
   const fetchClientSecret = async (): Promise<string> => {
+    const deliveryAddress = orderType === 'DELIVERY' && selectedLocation
+      ? `${selectedLocation.address} [${selectedLocation.lat.toFixed(6)}, ${selectedLocation.lng.toFixed(6)}]`
+      : form.address;
+
     const { data, error } = await checkoutApi.createCheckoutSession({
       items: items.map((item) => ({
         name: item.name,
@@ -84,13 +179,15 @@ export default function Checkout() {
       deliveryDetails: orderType === 'DELIVERY' ? {
         name: form.name,
         phone: form.phone,
-        address: form.address,
+        address: deliveryAddress,
         notes: form.notes,
+        contactless: form.contactless,
       } : {
         name: form.name,
         phone: form.phone,
         address: orderType === 'PICKUP' ? 'PICKUP' : 'DINE_IN',
         notes: form.notes,
+        contactless: false,
       },
       returnUrl: `${window.location.origin}/checkout/return?session_id={CHECKOUT_SESSION_ID}`,
     });
@@ -132,9 +229,11 @@ export default function Checkout() {
             <ArrowLeft className="h-4 w-4" />
             <span className="hidden sm:inline">Back</span>
           </Link>
-          <h1 className="text-lg sm:text-xl md:text-2xl font-normal" style={{ fontFamily: "'DM Serif Display', serif" }}>
-            Checkout
-          </h1>
+          <Link to="/" className="absolute left-1/2 -translate-x-1/2">
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-normal" style={{ fontFamily: "'DM Serif Display', serif" }}>
+              APlus
+            </h1>
+          </Link>
           <div className="w-12 sm:w-16" />
         </div>
       </header>
@@ -187,11 +286,59 @@ export default function Checkout() {
                 </div>
 
                 {orderType === 'DELIVERY' && (
-                  <div>
-                    <Label htmlFor="address" className="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 mb-2">
-                      <MapPin className="h-3.5 w-3.5" />Delivery Address *
-                    </Label>
-                    <Textarea id="address" name="address" value={form.address} onChange={handleChange} placeholder="Full delivery address" required rows={3} className="text-sm resize-none" />
+                  <div className="space-y-4">
+                    <div>
+                      <Label className="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 mb-2">
+                        <MapPin className="h-3.5 w-3.5" />Delivery Location *
+                      </Label>
+                      {isLoadingAddress ? (
+                        <div className="flex items-center justify-center py-8 border rounded-xl">
+                          <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                          <span className="ml-2 text-sm text-muted-foreground">Loading saved address...</span>
+                        </div>
+                      ) : (
+                        <LocationPicker
+                          onLocationSelect={handleLocationSelect}
+                          initialLocation={savedLocation}
+                        />
+                      )}
+                    </div>
+
+                    {/* Contactless delivery checkbox */}
+                    <label className="flex items-center gap-3 p-3 rounded-lg border border-border bg-muted/30 cursor-pointer hover:bg-muted/50 transition-colors">
+                      <input
+                        type="checkbox"
+                        checked={form.contactless}
+                        onChange={(e) => setForm(prev => ({ ...prev, contactless: e.target.checked }))}
+                        className="h-4 w-4 rounded border-border"
+                      />
+                      <div className="flex-1">
+                        <span className="text-sm font-medium">Contactless delivery</span>
+                        <p className="text-xs text-muted-foreground" style={{ fontFamily: "'Space Mono', monospace" }}>
+                          Rider will leave your order at the door
+                        </p>
+                      </div>
+                      <HandMetal className="h-4 w-4 text-muted-foreground" />
+                    </label>
+
+                    {/* Save address checkbox - only show if user is logged in */}
+                    {user && selectedLocation && selectedLocation.isWithinRange && (
+                      <label className="flex items-center gap-3 p-3 rounded-lg border border-border bg-muted/30 cursor-pointer hover:bg-muted/50 transition-colors">
+                        <input
+                          type="checkbox"
+                          checked={saveAddress}
+                          onChange={(e) => setSaveAddress(e.target.checked)}
+                          className="h-4 w-4 rounded border-border"
+                        />
+                        <div className="flex-1">
+                          <span className="text-sm font-medium">Save this address to my profile</span>
+                          <p className="text-xs text-muted-foreground" style={{ fontFamily: "'Space Mono', monospace" }}>
+                            Use this location for future orders
+                          </p>
+                        </div>
+                        <Save className="h-4 w-4 text-muted-foreground" />
+                      </label>
+                    )}
                   </div>
                 )}
 
@@ -244,8 +391,26 @@ export default function Checkout() {
                 )}
 
                 <div>
-                  <Label htmlFor="notes" className="text-xs font-bold uppercase tracking-wider mb-2 block">Special Instructions</Label>
-                  <Textarea id="notes" name="notes" value={form.notes} onChange={handleChange} placeholder="Any special requests? (optional)" rows={2} className="text-sm resize-none" />
+                  <Label htmlFor="notes" className="text-xs font-bold uppercase tracking-wider mb-2 block">
+                    {orderType === 'DELIVERY' ? 'Delivery Instructions' : 'Special Instructions'}
+                  </Label>
+                  <Textarea
+                    id="notes"
+                    name="notes"
+                    value={form.notes}
+                    onChange={handleChange}
+                    placeholder={orderType === 'DELIVERY'
+                      ? "e.g., Leave at door, call on arrival, building entrance code..."
+                      : "Any special requests? (optional)"
+                    }
+                    rows={3}
+                    className="text-sm resize-none"
+                  />
+                  {orderType === 'DELIVERY' && (
+                    <p className="text-[10px] text-muted-foreground mt-1" style={{ fontFamily: "'Space Mono', monospace" }}>
+                      Help our rider find you easily
+                    </p>
+                  )}
                 </div>
               </div>
 

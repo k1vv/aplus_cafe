@@ -34,6 +34,9 @@ public class SecurityConfig {
     private final JwtAuthenticationFilter jwtAuthFilter;
     private final UserDetailsService userDetailsService;
 
+    @org.springframework.beans.factory.annotation.Value("${app.frontend-url:http://localhost:5173}")
+    private String frontendUrl;
+
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
@@ -50,6 +53,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/tables/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/reservation-slots/**").permitAll()
                         .requestMatchers("/api/webhook/**").permitAll()
+                        .requestMatchers("/api/checkout/create-session").permitAll()
+                        .requestMatchers("/api/checkout/confirm").permitAll()
 
                         // Admin only endpoints
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
@@ -72,7 +77,13 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(List.of("http://localhost:5173", "http://localhost:8080", "http://localhost:3000"));
+        // Include both production URL and localhost for development
+        configuration.setAllowedOrigins(List.of(
+            frontendUrl,
+            "http://localhost:5173",
+            "http://localhost:8080",
+            "http://localhost:3000"
+        ));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));
         configuration.setAllowCredentials(true);

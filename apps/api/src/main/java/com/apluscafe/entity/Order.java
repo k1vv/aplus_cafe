@@ -60,6 +60,7 @@ public class Order {
     private LocalDateTime preparingAt;
     private LocalDateTime readyAt;
     private LocalDateTime deliveredAt;
+    private LocalDateTime cancelledAt;
 
     @CreationTimestamp
     private LocalDateTime createdAt;

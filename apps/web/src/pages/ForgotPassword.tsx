@@ -38,9 +38,11 @@ export default function ForgotPassword() {
               <ArrowLeft className="h-4 w-4" />
               Back
             </Link>
-            <h1 className="text-xl sm:text-2xl font-normal" style={{ fontFamily: "'DM Serif Display', serif" }}>
-              Check Email
-            </h1>
+            <Link to="/" className="absolute left-1/2 -translate-x-1/2">
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-normal" style={{ fontFamily: "'DM Serif Display', serif" }}>
+                APlus
+              </h1>
+            </Link>
             <div className="w-16" />
           </div>
         </header>
@@ -81,9 +83,11 @@ export default function ForgotPassword() {
             <ArrowLeft className="h-4 w-4" />
             Back
           </Link>
-          <h1 className="text-xl sm:text-2xl font-normal" style={{ fontFamily: "'DM Serif Display', serif" }}>
-            Reset Password
-          </h1>
+          <Link to="/" className="absolute left-1/2 -translate-x-1/2">
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-normal" style={{ fontFamily: "'DM Serif Display', serif" }}>
+              APlus
+            </h1>
+          </Link>
           <div className="w-16" />
         </div>
       </header>

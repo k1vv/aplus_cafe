@@ -82,7 +82,7 @@ export default function AdminLogin() {
                 type="email"
                 value={form.email}
                 onChange={handleChange}
-                placeholder="admin@aplus.cafe"
+                placeholder="admin@gmail.com"
                 required
                 className="bg-[#1a1a1a] border-gray-700 text-white placeholder:text-gray-500 focus:border-primary"
               />
