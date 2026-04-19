@@ -1,8 +1,7 @@
 -- Insert default admin user (using users table with ADMIN role)
 -- Email: admin@gmail.com, Password: admin123 (BCrypt encoded)
--- Using dollar-quoted string ($$...$$) to avoid $ being interpreted as escape character
-INSERT INTO users (email, password_hash, full_name, role, is_active, email_verified)
-SELECT 'admin@gmail.com', $$$2a$10$bUMjRgRVX0HHhqbSu684/OQp4M2cBwIc4cwh5K5IdJtDwVZ1Rj.P2$$, 'Admin User', 'ADMIN', true, true
+INSERT INTO users (email, password_hash, full_name, role, is_active, email_verified, two_factor_enabled)
+SELECT 'admin@gmail.com', '$2a$10$bUMjRgRVX0HHhqbSu684/OQp4M2cBwIc4cwh5K5IdJtDwVZ1Rj.P2', 'Admin User', 'ADMIN', true, true, false
 WHERE NOT EXISTS (SELECT 1 FROM users WHERE email = 'admin@gmail.com');
 
 -- Insert default categories if not exists
