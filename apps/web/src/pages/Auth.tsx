@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { authApi } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
+import LoadingOverlay from "@/components/LoadingOverlay";
 
 export default function Auth() {
   const navigate = useNavigate();
@@ -235,6 +236,7 @@ export default function Auth() {
 
   return (
     <div className="min-h-screen bg-background">
+      {loading && <LoadingOverlay message={isLogin ? "Signing in..." : "Creating account..."} />}
       <header className="sticky top-0 z-40 bg-primary text-primary-foreground">
         <div className="flex items-center justify-between px-6 py-4 sm:px-10">
           <Link to="/" className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.2em] hover:opacity-70 transition-opacity">
@@ -267,7 +269,7 @@ export default function Auth() {
                 <User className="h-3.5 w-3.5" />
                 Full Name
               </Label>
-              <Input id="fullName" name="fullName" value={form.fullName} onChange={handleChange} placeholder="Your full name" className="text-sm" />
+              <Input id="fullName" name="fullName" value={form.fullName} onChange={handleChange} placeholder="Your full name" className="text-sm" maxLength={255} required />
             </div>
           )}
 
@@ -276,7 +278,7 @@ export default function Auth() {
               <Mail className="h-3.5 w-3.5" />
               Email
             </Label>
-            <Input id="email" name="email" type="email" value={form.email} onChange={handleChange} placeholder="you@example.com" required className="text-sm" />
+            <Input id="email" name="email" type="email" value={form.email} onChange={handleChange} placeholder="you@example.com" required className="text-sm" maxLength={255} />
           </div>
 
           <div>
@@ -284,7 +286,7 @@ export default function Auth() {
               <Lock className="h-3.5 w-3.5" />
               Password
             </Label>
-            <Input id="password" name="password" type="password" value={form.password} onChange={handleChange} placeholder="Min 6 characters" required minLength={6} className="text-sm" />
+            <Input id="password" name="password" type="password" value={form.password} onChange={handleChange} placeholder="Min 8 characters" required minLength={8} maxLength={128} className="text-sm" />
           </div>
 
           {isLogin && (

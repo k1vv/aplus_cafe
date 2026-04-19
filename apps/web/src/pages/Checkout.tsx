@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { ArrowLeft, CreditCard, MapPin, Phone, User, Clock, Store, Truck, UtensilsCrossed, Save, Loader2, HandMetal } from "lucide-react";
+import { ArrowLeft, CreditCard, MapPin, Phone, User, Clock, Store, Truck, UtensilsCrossed, Save, Loader2, HandMetal, Navigation } from "lucide-react";
 import { EmbeddedCheckoutProvider, EmbeddedCheckout } from "@stripe/react-stripe-js";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,8 +11,10 @@ import { useAuth } from "@/context/AuthContext";
 import { PaymentTestModeBanner } from "@/components/PaymentTestModeBanner";
 import { getStripe } from "@/lib/stripe";
 import { checkoutApi, userApi } from "@/lib/api";
+import { SHOP_LOCATION } from "@/lib/constants";
 import { toast } from "sonner";
 import LocationPicker from "@/components/LocationPicker";
+import LoadingOverlay from "@/components/LoadingOverlay";
 
 type OrderType = 'DELIVERY' | 'PICKUP' | 'DINE_IN';
 
@@ -54,6 +56,7 @@ export default function Checkout() {
   const [saveAddress, setSaveAddress] = useState(false);
   const [isSavingAddress, setIsSavingAddress] = useState(false);
   const [isLoadingAddress, setIsLoadingAddress] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   // Load saved delivery address on mount
   useEffect(() => {
@@ -155,12 +158,15 @@ export default function Checkout() {
       return;
     }
 
+    setIsProcessing(true);
+
     // Save address if checkbox is checked
     if (saveAddress && selectedLocation && user) {
       await handleSaveAddress();
     }
 
     setShowPayment(true);
+    setIsProcessing(false);
   };
 
   const fetchClientSecret = async (): Promise<string> => {
@@ -222,6 +228,9 @@ export default function Checkout() {
 
   return (
     <div className="min-h-screen bg-background">
+      {(isProcessing || isSavingAddress || isLoadingAddress) && (
+        <LoadingOverlay message={isLoadingAddress ? "Loading saved address..." : isSavingAddress ? "Saving address..." : "Processing..."} />
+      )}
       <PaymentTestModeBanner />
       <header className="sticky top-0 z-40 bg-primary text-primary-foreground">
         <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 md:px-10">
@@ -276,13 +285,13 @@ export default function Checkout() {
                   <Label htmlFor="name" className="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 mb-2">
                     <User className="h-3.5 w-3.5" />Full Name *
                   </Label>
-                  <Input id="name" name="name" value={form.name} onChange={handleChange} placeholder="Your full name" required className="text-sm" />
+                  <Input id="name" name="name" value={form.name} onChange={handleChange} placeholder="Your full name" required className="text-sm" maxLength={255} />
                 </div>
                 <div>
                   <Label htmlFor="phone" className="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 mb-2">
                     <Phone className="h-3.5 w-3.5" />Phone Number *
                   </Label>
-                  <Input id="phone" name="phone" type="tel" value={form.phone} onChange={handleChange} placeholder="e.g. 012-345 6789" required className="text-sm" />
+                  <Input id="phone" name="phone" type="tel" value={form.phone} onChange={handleChange} placeholder="e.g. 012-345 6789" required className="text-sm" maxLength={20} pattern="[0-9+\-\s]*" />
                 </div>
 
                 {orderType === 'DELIVERY' && (
@@ -343,49 +352,101 @@ export default function Checkout() {
                 )}
 
                 {orderType === 'PICKUP' && (
-                  <div>
-                    <Label htmlFor="pickupTime" className="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 mb-2">
-                      <Clock className="h-3.5 w-3.5" />Preferred Pickup Time
-                    </Label>
-                    <select
-                      id="pickupTime"
-                      name="pickupTime"
-                      value={form.pickupTime}
-                      onChange={handleChange}
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    >
-                      <option value="">As soon as possible</option>
-                      <option value="15">In 15 minutes</option>
-                      <option value="30">In 30 minutes</option>
-                      <option value="45">In 45 minutes</option>
-                      <option value="60">In 1 hour</option>
-                    </select>
+                  <div className="space-y-4">
+                    {/* Shop Location Info */}
+                    <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
+                      <div className="flex items-start gap-3">
+                        <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                          <Store className="h-5 w-5 text-primary" />
+                        </div>
+                        <div className="flex-1">
+                          <p className="font-medium text-sm">{SHOP_LOCATION.name}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5" style={{ fontFamily: "'Space Mono', monospace" }}>
+                            {SHOP_LOCATION.address}
+                          </p>
+                          <a
+                            href={`https://www.google.com/maps?q=${SHOP_LOCATION.lat},${SHOP_LOCATION.lng}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-xs text-primary mt-2 hover:underline"
+                          >
+                            <Navigation className="h-3 w-3" />
+                            Get Directions
+                          </a>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <Label htmlFor="pickupTime" className="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 mb-2">
+                        <Clock className="h-3.5 w-3.5" />Preferred Pickup Time
+                      </Label>
+                      <select
+                        id="pickupTime"
+                        name="pickupTime"
+                        value={form.pickupTime}
+                        onChange={handleChange}
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        <option value="">As soon as possible</option>
+                        <option value="15">In 15 minutes</option>
+                        <option value="30">In 30 minutes</option>
+                        <option value="45">In 45 minutes</option>
+                        <option value="60">In 1 hour</option>
+                      </select>
+                    </div>
                   </div>
                 )}
 
                 {orderType === 'DINE_IN' && (
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="tableNumber" className="text-xs font-bold uppercase tracking-wider mb-2 block">
-                        Table Number
-                      </Label>
-                      <Input id="tableNumber" name="tableNumber" value={form.tableNumber} onChange={handleChange} placeholder="e.g. 5" className="text-sm" />
+                  <div className="space-y-4">
+                    {/* Shop Location Info */}
+                    <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
+                      <div className="flex items-start gap-3">
+                        <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                          <UtensilsCrossed className="h-5 w-5 text-primary" />
+                        </div>
+                        <div className="flex-1">
+                          <p className="font-medium text-sm">{SHOP_LOCATION.name}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5" style={{ fontFamily: "'Space Mono', monospace" }}>
+                            {SHOP_LOCATION.address}
+                          </p>
+                          <a
+                            href={`https://www.google.com/maps?q=${SHOP_LOCATION.lat},${SHOP_LOCATION.lng}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-xs text-primary mt-2 hover:underline"
+                          >
+                            <Navigation className="h-3 w-3" />
+                            Get Directions
+                          </a>
+                        </div>
+                      </div>
                     </div>
-                    <div>
-                      <Label htmlFor="partySize" className="text-xs font-bold uppercase tracking-wider mb-2 block">
-                        Party Size
-                      </Label>
-                      <select
-                        id="partySize"
-                        name="partySize"
-                        value={form.partySize}
-                        onChange={handleChange}
-                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      >
-                        {[1, 2, 3, 4, 5, 6].map((n) => (
-                          <option key={n} value={n}>{n} {n === 1 ? 'person' : 'people'}</option>
-                        ))}
-                      </select>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="tableNumber" className="text-xs font-bold uppercase tracking-wider mb-2 block">
+                          Table Number
+                        </Label>
+                        <Input id="tableNumber" name="tableNumber" value={form.tableNumber} onChange={handleChange} placeholder="e.g. 5" className="text-sm" maxLength={10} />
+                      </div>
+                      <div>
+                        <Label htmlFor="partySize" className="text-xs font-bold uppercase tracking-wider mb-2 block">
+                          Party Size
+                        </Label>
+                        <select
+                          id="partySize"
+                          name="partySize"
+                          value={form.partySize}
+                          onChange={handleChange}
+                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        >
+                          {[1, 2, 3, 4, 5, 6].map((n) => (
+                            <option key={n} value={n}>{n} {n === 1 ? 'person' : 'people'}</option>
+                          ))}
+                        </select>
+                      </div>
                     </div>
                   </div>
                 )}
@@ -405,6 +466,7 @@ export default function Checkout() {
                     }
                     rows={3}
                     className="text-sm resize-none"
+                    maxLength={500}
                   />
                   {orderType === 'DELIVERY' && (
                     <p className="text-[10px] text-muted-foreground mt-1" style={{ fontFamily: "'Space Mono', monospace" }}>

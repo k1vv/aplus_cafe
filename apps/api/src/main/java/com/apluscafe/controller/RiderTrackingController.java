@@ -142,6 +142,32 @@ public class RiderTrackingController {
     }
 
     private void broadcastLocationUpdate(Long deliveryId, Double lat, Double lng) {
+        broadcastToDelivery(deliveryId, lat, lng, null, null, null);
+    }
+
+    /**
+     * Static method to broadcast rider location updates (used by simulation service)
+     */
+    public static void broadcastRiderLocation(Long deliveryId, Double lat, Double lng,
+                                               String riderName, String vehicleType, String status) {
+        CopyOnWriteArrayList<SseEmitter> emitters = deliveryTrackers.get(deliveryId);
+        if (emitters != null && !emitters.isEmpty()) {
+            RiderLocationData data = new RiderLocationData(lat, lng, riderName, vehicleType, status);
+
+            for (SseEmitter emitter : emitters) {
+                try {
+                    emitter.send(SseEmitter.event()
+                            .name("rider-location")
+                            .data(data));
+                } catch (IOException e) {
+                    emitters.remove(emitter);
+                }
+            }
+        }
+    }
+
+    private void broadcastToDelivery(Long deliveryId, Double lat, Double lng,
+                                      String riderName, String vehicleType, String status) {
         CopyOnWriteArrayList<SseEmitter> emitters = deliveryTrackers.get(deliveryId);
         if (emitters != null && !emitters.isEmpty()) {
             Delivery delivery = deliveryRepository.findById(deliveryId).orElse(null);
@@ -150,9 +176,9 @@ public class RiderTrackingController {
             RiderDetails rider = delivery.getRider();
             RiderLocationData data = new RiderLocationData(
                     lat, lng,
-                    rider.getUser().getFullName(),
-                    rider.getVehicleType(),
-                    delivery.getStatus().name()
+                    riderName != null ? riderName : rider.getUser().getFullName(),
+                    vehicleType != null ? vehicleType : rider.getVehicleType(),
+                    status != null ? status : delivery.getStatus().name()
             );
 
             for (SseEmitter emitter : emitters) {

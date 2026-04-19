@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
 import { MapContainer, TileLayer, Marker, Polyline, useMap } from "react-leaflet";
-import { Icon, LatLng } from "leaflet";
+import { Icon } from "leaflet";
 import { Truck, MapPin, RefreshCw, Loader2, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { SHOP_LOCATION } from "@/lib/constants";
 import "leaflet/dist/leaflet.css";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080/api';
@@ -21,12 +22,6 @@ const destinationIcon = new Icon({
   iconSize: [25, 41],
   iconAnchor: [12, 41],
 });
-
-// Shop location
-const SHOP_LOCATION = {
-  lat: 3.1390,
-  lng: 101.6869,
-};
 
 interface RiderLocation {
   lat: number | null;

@@ -8,13 +8,16 @@ import com.apluscafe.dto.response.ReviewResponse;
 import com.apluscafe.dto.response.ReviewStatsResponse;
 import com.apluscafe.dto.response.UserResponse;
 import com.apluscafe.entity.Announcement;
+import com.apluscafe.entity.RiderDetails;
 import com.apluscafe.entity.User;
 import com.apluscafe.enums.OrderStatus;
 import com.apluscafe.enums.ReservationStatus;
+import com.apluscafe.repository.RiderDetailsRepository;
 import com.apluscafe.repository.UserRepository;
 import com.apluscafe.security.UserDetailsImpl;
 import com.apluscafe.service.AnalyticsService;
 import com.apluscafe.service.AnnouncementService;
+import com.apluscafe.service.DeliveryService;
 import com.apluscafe.service.MenuService;
 import com.apluscafe.service.OrderService;
 import com.apluscafe.service.ReservationService;
@@ -46,6 +49,8 @@ public class AdminController {
     private final AnalyticsService analyticsService;
     private final UserRepository userRepository;
     private final ReviewService reviewService;
+    private final RiderDetailsRepository riderDetailsRepository;
+    private final DeliveryService deliveryService;
 
     // Analytics
     @GetMapping("/analytics")
@@ -101,7 +106,37 @@ public class AdminController {
     public ResponseEntity<OrderResponse> updateOrderStatus(
             @PathVariable Long id,
             @RequestBody UpdateStatusRequest request) {
-        return ResponseEntity.ok(orderService.updateOrderStatus(id, request.getStatus()));
+        return ResponseEntity.ok(orderService.updateOrderStatus(id, request.getStatus(), request.getCancellationReason()));
+    }
+
+    // Rider Management
+    @GetMapping("/riders")
+    public ResponseEntity<List<RiderResponse>> getAvailableRiders() {
+        List<RiderDetails> riders = riderDetailsRepository.findAll();
+        return ResponseEntity.ok(riders.stream()
+                .map(r -> new RiderResponse(
+                        r.getId(),
+                        r.getUser().getFullName(),
+                        r.getVehicleType(),
+                        r.getLicensePlate(),
+                        r.getIsAvailable(),
+                        r.getRating()
+                ))
+                .collect(Collectors.toList()));
+    }
+
+    @PostMapping("/orders/{orderId}/assign-rider")
+    public ResponseEntity<Void> assignRider(
+            @PathVariable Long orderId,
+            @RequestBody AssignRiderRequest request) {
+        deliveryService.assignRider(orderId, request.getRiderId());
+        return ResponseEntity.ok().build();
+    }
+
+    @DeleteMapping("/orders/{orderId}/assign-rider")
+    public ResponseEntity<Void> unassignRider(@PathVariable Long orderId) {
+        deliveryService.unassignRider(orderId);
+        return ResponseEntity.ok().build();
     }
 
     // Reservation Management
@@ -218,6 +253,7 @@ public class AdminController {
     @Data
     static class UpdateStatusRequest {
         private OrderStatus status;
+        private String cancellationReason;
     }
 
     @Data
@@ -247,5 +283,21 @@ public class AdminController {
     @Data
     static class ReviewResponseRequest {
         private String response;
+    }
+
+    @Data
+    static class AssignRiderRequest {
+        private Long riderId;
+    }
+
+    @Data
+    @lombok.AllArgsConstructor
+    static class RiderResponse {
+        private Long id;
+        private String name;
+        private String vehicleType;
+        private String licensePlate;
+        private Boolean isAvailable;
+        private Double rating;
     }
 }

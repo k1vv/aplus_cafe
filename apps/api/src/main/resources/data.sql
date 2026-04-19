@@ -70,3 +70,40 @@ WHERE NOT EXISTS (SELECT 1 FROM menu WHERE name = 'Scone with Jam');
 INSERT INTO menu (category_id, name, description, price, image_url, is_available)
 SELECT 2, 'Tiramisu', 'Mascarpone cream, espresso-soaked ladyfingers and cocoa', 9.90, '/images/cafe-tiramisu.jpg', true
 WHERE NOT EXISTS (SELECT 1 FROM menu WHERE name = 'Tiramisu');
+
+-- Insert rider users (Password: rider123 - BCrypt encoded)
+-- Rider 1: Ahmad (Regular rider)
+INSERT INTO users (email, password_hash, full_name, role, is_active, email_verified, two_factor_enabled)
+SELECT 'ahmad.rider@apluscafe.com', '$2a$10$bUMjRgRVX0HHhqbSu684/OQp4M2cBwIc4cwh5K5IdJtDwVZ1Rj.P2', 'Ahmad Bin Hassan', 'RIDER', true, true, false
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE email = 'ahmad.rider@apluscafe.com');
+
+-- Rider 2: Mei Ling (Regular rider)
+INSERT INTO users (email, password_hash, full_name, role, is_active, email_verified, two_factor_enabled)
+SELECT 'meiling.rider@apluscafe.com', '$2a$10$bUMjRgRVX0HHhqbSu684/OQp4M2cBwIc4cwh5K5IdJtDwVZ1Rj.P2', 'Tan Mei Ling', 'RIDER', true, true, false
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE email = 'meiling.rider@apluscafe.com');
+
+-- Rider 3: SimBot (Simulation rider - will auto-simulate delivery)
+INSERT INTO users (email, password_hash, full_name, role, is_active, email_verified, two_factor_enabled)
+SELECT 'simbot.rider@apluscafe.com', '$2a$10$bUMjRgRVX0HHhqbSu684/OQp4M2cBwIc4cwh5K5IdJtDwVZ1Rj.P2', 'SimBot (Auto)', 'RIDER', true, true, false
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE email = 'simbot.rider@apluscafe.com');
+
+-- Insert rider details for each rider user
+-- Note: We use subqueries to get the user IDs since they may vary
+
+-- Rider details for Ahmad
+INSERT INTO rider_details (user_id, vehicle_type, license_plate, is_available, current_latitude, current_longitude, rating, total_deliveries)
+SELECT id, 'Motorcycle', 'WA 1234 B', true, 2.9772, 101.731, 4.8, 150
+FROM users WHERE email = 'ahmad.rider@apluscafe.com'
+AND NOT EXISTS (SELECT 1 FROM rider_details rd JOIN users u ON rd.user_id = u.id WHERE u.email = 'ahmad.rider@apluscafe.com');
+
+-- Rider details for Mei Ling
+INSERT INTO rider_details (user_id, vehicle_type, license_plate, is_available, current_latitude, current_longitude, rating, total_deliveries)
+SELECT id, 'Motorcycle', 'WB 5678 C', true, 2.9772, 101.731, 4.9, 200
+FROM users WHERE email = 'meiling.rider@apluscafe.com'
+AND NOT EXISTS (SELECT 1 FROM rider_details rd JOIN users u ON rd.user_id = u.id WHERE u.email = 'meiling.rider@apluscafe.com');
+
+-- Rider details for SimBot (Simulation rider - starts at shop location)
+INSERT INTO rider_details (user_id, vehicle_type, license_plate, is_available, current_latitude, current_longitude, rating, total_deliveries)
+SELECT id, 'E-Bike', 'SIM-BOT', true, 2.9772, 101.731, 5.0, 999
+FROM users WHERE email = 'simbot.rider@apluscafe.com'
+AND NOT EXISTS (SELECT 1 FROM rider_details rd JOIN users u ON rd.user_id = u.id WHERE u.email = 'simbot.rider@apluscafe.com');

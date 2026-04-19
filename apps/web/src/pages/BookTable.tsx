@@ -1,10 +1,11 @@
-import { useState } from "react";
-import { CalendarDays, Clock, Users, ArrowLeft, Check, AlertCircle } from "lucide-react";
+import { useState, useEffect } from "react";
+import { CalendarDays, Clock, Users, ArrowLeft, Check, AlertCircle, UtensilsCrossed, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Link } from "react-router-dom";
 import { reservationsApi } from "@/lib/api";
+import LoadingOverlay from "@/components/LoadingOverlay";
 
 const timeSlots = [
   "08:00", "08:30", "09:00", "09:30", "10:00", "10:30",
@@ -12,6 +13,13 @@ const timeSlots = [
   "14:00", "14:30", "15:00", "15:30", "16:00", "16:30",
   "17:00", "17:30",
 ];
+
+interface SelectedTable {
+  id: number;
+  name: string;
+  seats: number;
+  section: string;
+}
 
 const formatTime = (time: string) => {
   const [hours, minutes] = time.split(":");
@@ -31,6 +39,29 @@ export default function BookTable() {
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [selectedTable, setSelectedTable] = useState<SelectedTable | null>(null);
+
+  // Check for table selection from Cafe Floor Plan
+  useEffect(() => {
+    const storedTable = sessionStorage.getItem("selectedTable");
+    if (storedTable) {
+      try {
+        const table = JSON.parse(storedTable) as SelectedTable;
+        setSelectedTable(table);
+        // Pre-fill guest count based on table size
+        if (table.seats <= 6) {
+          setGuests(String(table.seats));
+        } else {
+          setGuests("6+");
+        }
+        // Add table info to special requests
+        setSpecialRequests(`Table ${table.name} (${table.section} section) preferred`);
+        sessionStorage.removeItem("selectedTable");
+      } catch (e) {
+        console.error("Failed to parse selected table:", e);
+      }
+    }
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -87,6 +118,7 @@ export default function BookTable() {
 
   return (
     <div className="min-h-screen bg-background">
+      {loading && <LoadingOverlay message="Booking your table..." />}
       <div className="bg-primary text-primary-foreground px-6 py-4">
         <Link to="/" className="text-xs uppercase tracking-[0.15em] hover:opacity-70 transition-opacity">
           ← Back
@@ -100,6 +132,30 @@ export default function BookTable() {
         <p className="text-sm text-muted-foreground mb-10" style={{ fontFamily: "'Space Mono', monospace" }}>
           Reserve your spot at APlus. Walk-ins are welcome too.
         </p>
+
+        {/* Selected Table Banner (when coming from Cafe Floor Plan) */}
+        {selectedTable && (
+          <div className="mb-6 p-4 rounded-xl bg-primary/5 border border-primary/20 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
+                <UtensilsCrossed className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <p className="text-sm font-bold">Table {selectedTable.name} Selected</p>
+                <p className="text-xs text-muted-foreground" style={{ fontFamily: "'Space Mono', monospace" }}>
+                  {selectedTable.seats} seats • {selectedTable.section} section
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSelectedTable(null)}
+              className="p-1.5 rounded-full hover:bg-primary/10 transition-colors"
+            >
+              <X className="h-4 w-4 text-muted-foreground" />
+            </button>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="space-y-2">
@@ -171,6 +227,7 @@ export default function BookTable() {
               onChange={(e) => setName(e.target.value)}
               placeholder="Name"
               required
+              maxLength={255}
             />
           </div>
 
@@ -182,6 +239,8 @@ export default function BookTable() {
               onChange={(e) => setPhone(e.target.value)}
               placeholder="012-345 6789"
               required
+              maxLength={20}
+              pattern="[0-9+\-\s]*"
             />
           </div>
 
@@ -192,6 +251,7 @@ export default function BookTable() {
               onChange={(e) => setSpecialRequests(e.target.value)}
               placeholder="Any special requests or dietary requirements..."
               rows={3}
+              maxLength={500}
             />
           </div>
 

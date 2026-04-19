@@ -12,10 +12,11 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   adminApi, menuApi, MenuItemResponse, Order, Reservation, AdminUser,
   CategoryResponse, CreateMenuItemRequest, AnalyticsResponse, Review, ReviewStats,
-  Announcement, adminReviewsApi, adminAnnouncementsApi
+  Announcement, adminReviewsApi, adminAnnouncementsApi, Rider
 } from "@/lib/api";
 import { toast } from "sonner";
 import { format } from "date-fns";
+import LoadingOverlay from "@/components/LoadingOverlay";
 
 const navItems = [
   { path: "/admin", label: "Dashboard", icon: LayoutDashboard },
@@ -306,10 +307,10 @@ function MenuManagement() {
       {showForm && (
         <div className="mb-6 p-4 rounded-xl border border-border bg-card space-y-3">
           <h3 className="text-sm font-bold">{editingId ? "Edit Item" : "New Item"}</h3>
-          <Input placeholder="Name" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} />
-          <Textarea placeholder="Description" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} />
+          <Input placeholder="Name" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} maxLength={255} />
+          <Textarea placeholder="Description" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} maxLength={1000} />
           <div className="grid grid-cols-2 gap-3">
-            <Input type="number" placeholder="Price" value={formData.price} onChange={(e) => setFormData({ ...formData, price: parseFloat(e.target.value) })} />
+            <Input type="number" placeholder="Price" value={formData.price} onChange={(e) => setFormData({ ...formData, price: parseFloat(e.target.value) })} min={0} max={99999} step={0.01} />
             <select
               className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
               value={formData.categoryId}
@@ -320,7 +321,7 @@ function MenuManagement() {
               ))}
             </select>
           </div>
-          <Input placeholder="Image URL" value={formData.imageUrl} onChange={(e) => setFormData({ ...formData, imageUrl: e.target.value })} />
+          <Input placeholder="Image URL" value={formData.imageUrl} onChange={(e) => setFormData({ ...formData, imageUrl: e.target.value })} maxLength={500} />
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" checked={formData.isAvailable} onChange={(e) => setFormData({ ...formData, isAvailable: e.target.checked })} />
             Available
@@ -366,9 +367,14 @@ function OrdersManagement() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
+  const [cancelModalOrder, setCancelModalOrder] = useState<Order | null>(null);
+  const [cancellationReason, setCancellationReason] = useState("");
+  const [riders, setRiders] = useState<Rider[]>([]);
+  const [assigningRider, setAssigningRider] = useState<string | null>(null);
 
   useEffect(() => {
     fetchOrders();
+    fetchRiders();
   }, []);
 
   const fetchOrders = async () => {
@@ -378,9 +384,48 @@ function OrdersManagement() {
     setLoading(false);
   };
 
-  const handleStatusUpdate = async (id: string, status: string, e: React.MouseEvent) => {
+  const fetchRiders = async () => {
+    const { data } = await adminApi.getRiders();
+    if (data) setRiders(data);
+  };
+
+  const handleAssignRider = async (orderId: string, riderId: number) => {
+    setAssigningRider(orderId);
+    const { error } = await adminApi.assignRider(orderId, riderId);
+    setAssigningRider(null);
+    if (error) {
+      toast.error("Failed to assign rider");
+      return;
+    }
+    toast.success("Rider assigned");
+    fetchOrders();
+  };
+
+  const handleUnassignRider = async (orderId: string) => {
+    setAssigningRider(orderId);
+    const { error } = await adminApi.unassignRider(orderId);
+    setAssigningRider(null);
+    if (error) {
+      toast.error("Failed to unassign rider");
+      return;
+    }
+    toast.success("Rider unassigned");
+    fetchOrders();
+  };
+
+  const handleStatusUpdate = async (id: string, status: string, e: React.MouseEvent, reason?: string) => {
     e.stopPropagation();
-    const { error } = await adminApi.updateOrderStatus(id, status);
+
+    // If cancelling, show modal first
+    if (status === 'CANCELLED') {
+      const order = orders.find(o => o.id === id);
+      if (order && !reason) {
+        setCancelModalOrder(order);
+        return;
+      }
+    }
+
+    const { error } = await adminApi.updateOrderStatus(id, status, reason);
     if (error) {
       toast.error("Failed to update status");
       return;
@@ -389,7 +434,48 @@ function OrdersManagement() {
     fetchOrders();
   };
 
-  const statuses = ["PENDING", "CONFIRMED", "PREPARING", "READY_FOR_PICKUP", "OUT_FOR_DELIVERY", "DELIVERED", "CANCELLED"];
+  const handleCancelConfirm = async () => {
+    if (!cancelModalOrder || !cancellationReason.trim()) {
+      toast.error("Please enter a cancellation reason");
+      return;
+    }
+
+    const { error } = await adminApi.updateOrderStatus(
+      cancelModalOrder.id,
+      'CANCELLED',
+      cancellationReason.trim()
+    );
+    if (error) {
+      toast.error("Failed to cancel order");
+      return;
+    }
+    toast.success("Order cancelled");
+    setCancelModalOrder(null);
+    setCancellationReason("");
+    fetchOrders();
+  };
+
+  // Status progression order (without CANCELLED - that's handled separately)
+  const statusProgression = ["PENDING", "CONFIRMED", "PREPARING", "READY_FOR_PICKUP", "OUT_FOR_DELIVERY", "DELIVERED"];
+
+  const getNextStatus = (currentStatus: string): string | null => {
+    const currentIndex = statusProgression.indexOf(currentStatus?.toUpperCase());
+    if (currentIndex === -1 || currentIndex >= statusProgression.length - 1) {
+      return null;
+    }
+    return statusProgression[currentIndex + 1];
+  };
+
+  const getStatusLabel = (status: string): string => {
+    const labels: Record<string, string> = {
+      PENDING: "Confirm Order",
+      CONFIRMED: "Start Preparing",
+      PREPARING: "Mark Ready",
+      READY_FOR_PICKUP: "Out for Delivery",
+      OUT_FOR_DELIVERY: "Mark Delivered",
+    };
+    return labels[status] || status.replace(/_/g, " ");
+  };
 
   const getStatusColor = (status: string) => {
     const s = status?.toUpperCase();
@@ -521,6 +607,75 @@ function OrdersManagement() {
                       </div>
                     )}
 
+                    {/* Rider Assignment - Only for delivery orders when READY_FOR_PICKUP */}
+                    {order.orderType === 'DELIVERY' && (
+                      <div>
+                        <h4 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2">
+                          <Truck className="inline h-3 w-3 mr-1" />
+                          Rider Assignment
+                        </h4>
+                        <div className="bg-background rounded-lg p-3">
+                          {order.assignedRiderId ? (
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="text-sm font-medium">{order.assignedRiderName}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  Status: <span className={`font-medium ${
+                                    order.deliveryStatus === 'IN_TRANSIT' ? 'text-green-500' :
+                                    order.deliveryStatus === 'ASSIGNED' ? 'text-blue-500' :
+                                    order.deliveryStatus === 'DELIVERED' ? 'text-primary' :
+                                    'text-muted-foreground'
+                                  }`}>{order.deliveryStatus?.replace(/_/g, ' ')}</span>
+                                </p>
+                              </div>
+                              {order.status?.toUpperCase() === 'READY_FOR_PICKUP' && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleUnassignRider(order.id)}
+                                  disabled={assigningRider === order.id}
+                                >
+                                  {assigningRider === order.id ? (
+                                    <span className="h-3 w-3 border-2 border-foreground border-t-transparent rounded-full animate-spin" />
+                                  ) : (
+                                    'Unassign'
+                                  )}
+                                </Button>
+                              )}
+                            </div>
+                          ) : order.status?.toUpperCase() === 'READY_FOR_PICKUP' ? (
+                            <div className="space-y-2">
+                              <p className="text-xs text-muted-foreground mb-2">Assign a rider before marking as out for delivery</p>
+                              <select
+                                className="w-full text-sm px-3 py-2 rounded-lg border border-border bg-background"
+                                value=""
+                                onChange={(e) => {
+                                  if (e.target.value) {
+                                    handleAssignRider(order.id, parseInt(e.target.value));
+                                  }
+                                }}
+                                disabled={assigningRider === order.id}
+                              >
+                                <option value="">Select a rider...</option>
+                                {riders.filter(r => r.isAvailable).map(rider => (
+                                  <option key={rider.id} value={rider.id}>
+                                    {rider.name} - {rider.vehicleType} ({rider.licensePlate})
+                                  </option>
+                                ))}
+                              </select>
+                              {riders.filter(r => r.isAvailable).length === 0 && (
+                                <p className="text-xs text-destructive">No available riders</p>
+                              )}
+                            </div>
+                          ) : (
+                            <p className="text-xs text-muted-foreground">
+                              Rider can be assigned when order is ready for pickup
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
                     {/* Timestamps */}
                     <div>
                       <h4 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2">Timeline</h4>
@@ -559,33 +714,135 @@ function OrdersManagement() {
                             <span>{format(new Date(order.deliveredAt), "dd MMM yyyy, h:mm a")}</span>
                           </div>
                         )}
+                        {order.cancelledAt && (
+                          <div className="flex justify-between text-destructive">
+                            <span>Cancelled:</span>
+                            <span>{format(new Date(order.cancelledAt), "dd MMM yyyy, h:mm a")}</span>
+                          </div>
+                        )}
                       </div>
                     </div>
 
-                    {/* Update Status */}
-                    <div>
-                      <h4 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2">Update Status</h4>
-                      <div className="flex flex-wrap gap-2">
-                        {statuses.map((s) => (
-                          <button
-                            key={s}
-                            onClick={(e) => handleStatusUpdate(order.id, s, e)}
-                            className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-colors ${
-                              order.status?.toUpperCase() === s
-                                ? 'bg-primary text-primary-foreground'
-                                : 'bg-background border border-border hover:bg-muted'
-                            }`}
-                          >
-                            {s.replace(/_/g, " ")}
-                          </button>
-                        ))}
+                    {/* Cancellation Reason */}
+                    {order.cancellationReason && (
+                      <div>
+                        <h4 className="text-[10px] font-bold uppercase tracking-wider text-destructive mb-2">Cancellation Reason</h4>
+                        <div className="bg-destructive/5 rounded-lg p-3 border border-destructive/20">
+                          <p className="text-sm text-destructive">{order.cancellationReason}</p>
+                        </div>
                       </div>
-                    </div>
+                    )}
+
+                    {/* Order Actions */}
+                    {order.status?.toUpperCase() !== 'DELIVERED' && order.status?.toUpperCase() !== 'CANCELLED' && (
+                      <div>
+                        <h4 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2">Actions</h4>
+                        <div className="flex flex-col gap-2">
+                          {/* Next Status Button */}
+                          {(() => {
+                            const nextStatus = getNextStatus(order.status);
+                            const currentStatus = order.status?.toUpperCase();
+
+                            // For delivery orders at READY_FOR_PICKUP, require rider assignment first
+                            if (currentStatus === 'READY_FOR_PICKUP' && order.orderType === 'DELIVERY' && !order.assignedRiderId) {
+                              return (
+                                <div className="bg-yellow-50 dark:bg-yellow-950/30 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3">
+                                  <p className="text-xs text-yellow-800 dark:text-yellow-300 font-medium">
+                                    Assign a rider above before marking as out for delivery
+                                  </p>
+                                </div>
+                              );
+                            }
+
+                            if (nextStatus) {
+                              return (
+                                <Button
+                                  onClick={(e) => handleStatusUpdate(order.id, nextStatus, e)}
+                                  className="w-full text-xs font-bold uppercase tracking-wider"
+                                >
+                                  <Check className="h-4 w-4 mr-2" />
+                                  {getStatusLabel(currentStatus || '')}
+                                </Button>
+                              );
+                            }
+                            return null;
+                          })()}
+
+                          {/* Cancel Button */}
+                          <Button
+                            variant="outline"
+                            onClick={(e) => handleStatusUpdate(order.id, 'CANCELLED', e)}
+                            className="w-full text-xs font-bold uppercase tracking-wider text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
+                          >
+                            <X className="h-4 w-4 mr-2" />
+                            Cancel Order
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Completed/Cancelled Status */}
+                    {(order.status?.toUpperCase() === 'DELIVERED' || order.status?.toUpperCase() === 'CANCELLED') && (
+                      <div className={`rounded-lg p-3 ${
+                        order.status?.toUpperCase() === 'DELIVERED'
+                          ? 'bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800'
+                          : 'bg-destructive/5 border border-destructive/20'
+                      }`}>
+                        <p className={`text-sm font-medium ${
+                          order.status?.toUpperCase() === 'DELIVERED'
+                            ? 'text-green-800 dark:text-green-300'
+                            : 'text-destructive'
+                        }`}>
+                          {order.status?.toUpperCase() === 'DELIVERED' ? 'Order Completed' : 'Order Cancelled'}
+                        </p>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Cancellation Reason Modal */}
+      {cancelModalOrder && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-card rounded-xl border border-border p-6 w-full max-w-md">
+            <h3 className="text-lg font-bold mb-2" style={{ fontFamily: "'DM Serif Display', serif" }}>
+              Cancel Order #{cancelModalOrder.id}
+            </h3>
+            <p className="text-sm text-muted-foreground mb-4">
+              Please provide a reason for cancelling this order. This will be visible to the customer.
+            </p>
+            <Textarea
+              placeholder="Enter cancellation reason..."
+              value={cancellationReason}
+              onChange={(e) => setCancellationReason(e.target.value)}
+              rows={3}
+              className="mb-4"
+              maxLength={500}
+            />
+            <div className="flex gap-2 justify-end">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setCancelModalOrder(null);
+                  setCancellationReason("");
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleCancelConfirm}
+                disabled={!cancellationReason.trim()}
+              >
+                <X className="h-4 w-4 mr-1" />
+                Confirm Cancellation
+              </Button>
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -884,6 +1141,7 @@ function ReviewsManagement() {
                     onChange={(e) => setResponseText(e.target.value)}
                     rows={2}
                     className="text-sm"
+                    maxLength={1000}
                   />
                   <div className="flex gap-2 justify-end">
                     <Button variant="outline" size="sm" onClick={() => { setRespondingTo(null); setResponseText(""); }}>
@@ -1025,17 +1283,20 @@ function AnnouncementsManagement() {
             placeholder="Title"
             value={formData.title}
             onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+            maxLength={255}
           />
           <Textarea
             placeholder="Content"
             value={formData.content}
             onChange={(e) => setFormData({ ...formData, content: e.target.value })}
             rows={3}
+            maxLength={2000}
           />
           <Input
             placeholder="Image URL (optional)"
             value={formData.imageUrl}
             onChange={(e) => setFormData({ ...formData, imageUrl: e.target.value })}
+            maxLength={500}
           />
           <div className="grid grid-cols-2 gap-3">
             <div>

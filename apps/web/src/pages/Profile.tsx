@@ -7,6 +7,7 @@ import { useAuth } from "@/context/AuthContext";
 import { userApi, Address, reservationsApi, Reservation, SavedDeliveryAddress } from "@/lib/api";
 import { toast } from "sonner";
 import { format } from "date-fns";
+import LoadingOverlay from "@/components/LoadingOverlay";
 
 export default function Profile() {
   const { user, refreshUser } = useAuth();
@@ -124,6 +125,9 @@ export default function Profile() {
 
   return (
     <div className="min-h-screen bg-background">
+      {(savingProfile || savingAddress) && (
+        <LoadingOverlay message={savingProfile ? "Saving profile..." : "Saving address..."} />
+      )}
       <header className="sticky top-0 z-40 bg-primary text-primary-foreground">
         <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 md:px-10">
           <Link to="/" className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.15em] sm:tracking-[0.2em] hover:opacity-70 transition-opacity">
@@ -178,6 +182,7 @@ export default function Profile() {
                     onChange={(e) => setFullName(e.target.value)}
                     placeholder="Full name"
                     className="flex-1"
+                    maxLength={255}
                   />
                 </div>
                 <div className="flex items-center gap-3">
@@ -187,6 +192,8 @@ export default function Profile() {
                     onChange={(e) => setPhone(e.target.value)}
                     placeholder="Phone number"
                     className="flex-1"
+                    maxLength={20}
+                    pattern="[0-9+\-\s]*"
                   />
                 </div>
               </>
@@ -298,22 +305,26 @@ export default function Profile() {
                 placeholder="Label (e.g., Home, Office)"
                 value={newAddress.label}
                 onChange={(e) => setNewAddress({ ...newAddress, label: e.target.value })}
+                maxLength={50}
               />
               <Input
                 placeholder="Street address"
                 value={newAddress.street}
                 onChange={(e) => setNewAddress({ ...newAddress, street: e.target.value })}
+                maxLength={255}
               />
               <div className="grid grid-cols-2 gap-3">
                 <Input
                   placeholder="City"
                   value={newAddress.city}
                   onChange={(e) => setNewAddress({ ...newAddress, city: e.target.value })}
+                  maxLength={100}
                 />
                 <Input
                   placeholder="Postal code"
                   value={newAddress.postalCode}
                   onChange={(e) => setNewAddress({ ...newAddress, postalCode: e.target.value })}
+                  maxLength={20}
                 />
               </div>
               <div className="flex gap-2 justify-end">

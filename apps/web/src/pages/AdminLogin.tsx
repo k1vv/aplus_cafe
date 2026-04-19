@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { authApi } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
+import LoadingOverlay from "@/components/LoadingOverlay";
 
 export default function AdminLogin() {
   const navigate = useNavigate();
@@ -47,6 +48,7 @@ export default function AdminLogin() {
 
   return (
     <div className="min-h-screen bg-[#1a1a1a] flex items-center justify-center px-4">
+      {loading && <LoadingOverlay message="Signing in..." />}
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">

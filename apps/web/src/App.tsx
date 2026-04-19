@@ -24,6 +24,7 @@ import VerifyEmail from "./pages/VerifyEmail.tsx";
 import ForgotPassword from "./pages/ForgotPassword.tsx";
 import ResetPassword from "./pages/ResetPassword.tsx";
 import SecuritySettings from "./pages/SecuritySettings.tsx";
+import CafeLayout from "./pages/CafeLayout.tsx";
 
 const queryClient = new QueryClient();
 
@@ -44,6 +45,11 @@ const App = () => (
               <Route path="/reset-password" element={<ResetPassword />} />
 
               {/* Protected Routes - require authentication */}
+              <Route path="/cafe" element={
+                <ProtectedRoute>
+                  <CafeLayout />
+                </ProtectedRoute>
+              } />
               <Route path="/book" element={
                 <ProtectedRoute>
                   <BookTable />

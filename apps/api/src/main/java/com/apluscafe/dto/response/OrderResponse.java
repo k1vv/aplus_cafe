@@ -38,6 +38,8 @@ public class OrderResponse {
     private LocalDateTime readyAt;
     private LocalDateTime outForDeliveryAt; // Added for frontend compatibility
     private LocalDateTime deliveredAt;
+    private LocalDateTime cancelledAt;
+    private String cancellationReason;
     private Integer estimatedDeliveryMinutes; // Added for frontend compatibility
     private List<OrderItemResponse> orderItems; // Renamed from 'items' to match frontend
 
@@ -45,10 +47,18 @@ public class OrderResponse {
     private String customerName;
     private String customerEmail;
 
+    // Rider/Delivery info for admin panel
+    private Long assignedRiderId;
+    private String assignedRiderName;
+    private String deliveryStatus;
+
     public static OrderResponse fromEntity(Order order) {
         // Calculate estimated delivery minutes from delivery entity if available
         Integer estimatedMinutes = 45; // Default 45 minutes
         LocalDateTime outForDelivery = null;
+        Long riderId = null;
+        String riderName = null;
+        String deliveryStatusStr = null;
 
         Delivery delivery = order.getDelivery();
         if (delivery != null) {
@@ -63,6 +73,12 @@ public class OrderResponse {
                 delivery.getStatus() == DeliveryStatus.IN_TRANSIT) {
                 outForDelivery = delivery.getPickedUpAt();
             }
+            // Get rider info
+            if (delivery.getRider() != null) {
+                riderId = delivery.getRider().getId();
+                riderName = delivery.getRider().getUser().getFullName();
+            }
+            deliveryStatusStr = delivery.getStatus() != null ? delivery.getStatus().name() : null;
         }
 
         return OrderResponse.builder()
@@ -81,12 +97,17 @@ public class OrderResponse {
                 .readyAt(order.getReadyAt())
                 .outForDeliveryAt(outForDelivery)
                 .deliveredAt(order.getDeliveredAt())
+                .cancelledAt(order.getCancelledAt())
+                .cancellationReason(order.getCancellationReason())
                 .estimatedDeliveryMinutes(estimatedMinutes)
                 .orderItems(order.getOrderItems().stream()
                         .map(OrderItemResponse::fromEntity)
                         .collect(Collectors.toList()))
                 .customerName(order.getUser() != null ? order.getUser().getFullName() : null)
                 .customerEmail(order.getUser() != null ? order.getUser().getEmail() : null)
+                .assignedRiderId(riderId)
+                .assignedRiderName(riderName)
+                .deliveryStatus(deliveryStatusStr)
                 .build();
     }
 

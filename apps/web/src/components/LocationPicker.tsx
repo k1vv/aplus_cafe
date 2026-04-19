@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
-import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Popup, Circle, useMapEvents, useMap } from "react-leaflet";
 import { Icon, LatLng } from "leaflet";
 import { MapPin, Navigation, AlertCircle, Check, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SHOP_LOCATION, MAX_DELIVERY_RADIUS_KM } from "@/lib/constants";
 import "leaflet/dist/leaflet.css";
 
 // Fix for default marker icon in React-Leaflet
@@ -17,13 +18,19 @@ const customIcon = new Icon({
   shadowSize: [41, 41],
 });
 
-// Shop location (APlus Cafe) - Update this to your actual shop coordinates
-const SHOP_LOCATION = {
-  lat: 3.1390, // Kuala Lumpur coordinates as example
-  lng: 101.6869,
-};
-
-const MAX_DELIVERY_RADIUS_KM = 20;
+// Custom cafe/shop icon (red marker)
+const cafeIcon = new Icon({
+  iconUrl: "data:image/svg+xml;base64," + btoa(`
+    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="42" viewBox="0 0 32 42">
+      <path d="M16 0C7.2 0 0 7.2 0 16c0 12 16 26 16 26s16-14 16-26C32 7.2 24.8 0 16 0z" fill="#dc2626"/>
+      <circle cx="16" cy="14" r="8" fill="white"/>
+      <text x="16" y="18" text-anchor="middle" font-size="10" font-weight="bold" fill="#dc2626">A+</text>
+    </svg>
+  `),
+  iconSize: [32, 42],
+  iconAnchor: [16, 42],
+  popupAnchor: [0, -42],
+});
 
 interface LocationPickerProps {
   onLocationSelect: (location: { lat: number; lng: number; address: string; isWithinRange: boolean }) => void;
@@ -157,6 +164,31 @@ export default function LocationPicker({ onLocationSelect, initialLocation, clas
           />
           <MapClickHandler onLocationClick={handleMapClick} />
           <RecenterMap lat={mapCenter.lat} lng={mapCenter.lng} />
+
+          {/* Cafe/Shop Location Marker */}
+          <Marker position={[SHOP_LOCATION.lat, SHOP_LOCATION.lng]} icon={cafeIcon}>
+            <Popup>
+              <div className="text-center">
+                <p className="font-bold text-sm">{SHOP_LOCATION.name}</p>
+                <p className="text-xs text-gray-600">{SHOP_LOCATION.address}</p>
+              </div>
+            </Popup>
+          </Marker>
+
+          {/* Delivery radius circle */}
+          <Circle
+            center={[SHOP_LOCATION.lat, SHOP_LOCATION.lng]}
+            radius={MAX_DELIVERY_RADIUS_KM * 1000}
+            pathOptions={{
+              color: "#22c55e",
+              fillColor: "#22c55e",
+              fillOpacity: 0.1,
+              weight: 2,
+              dashArray: "5, 10",
+            }}
+          />
+
+          {/* User's selected location marker */}
           {position && <Marker position={[position.lat, position.lng]} icon={customIcon} />}
         </MapContainer>
 
@@ -169,6 +201,22 @@ export default function LocationPicker({ onLocationSelect, initialLocation, clas
             </div>
           </div>
         )}
+
+        {/* Map Legend */}
+        <div className="absolute bottom-2 left-2 bg-white/95 dark:bg-gray-900/95 rounded-lg px-3 py-2 shadow-lg text-xs z-[1000]">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-red-600">📍</span>
+            <span className="text-gray-700 dark:text-gray-300">APlus Cafe</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-blue-600">📍</span>
+            <span className="text-gray-700 dark:text-gray-300">Your location</span>
+          </div>
+          <div className="flex items-center gap-2 mt-1 pt-1 border-t border-gray-200 dark:border-gray-700">
+            <span className="w-3 h-0.5 bg-green-500 border border-dashed border-green-600"></span>
+            <span className="text-gray-600 dark:text-gray-400">Delivery area</span>
+          </div>
+        </div>
       </div>
 
       {/* Use Current Location Button */}

@@ -23,12 +23,21 @@ async function handleResponse<T>(response: Response): Promise<ApiResponse<T>> {
     const error = await response.text();
     return { error: error || response.statusText };
   }
-  // Handle 204 No Content
+  // Handle 204 No Content or empty body
   if (response.status === 204) {
     return { data: undefined };
   }
-  const data = await response.json();
-  return { data };
+  // Check if response has content before parsing JSON
+  const text = await response.text();
+  if (!text || text.length === 0) {
+    return { data: undefined };
+  }
+  try {
+    const data = JSON.parse(text);
+    return { data };
+  } catch {
+    return { data: undefined };
+  }
 }
 
 export const api = {
@@ -254,10 +263,24 @@ export interface Order {
   readyAt: string | null;
   outForDeliveryAt: string | null;
   deliveredAt: string | null;
+  cancelledAt: string | null;
+  cancellationReason?: string;
   createdAt: string;
   orderItems: OrderItem[];
   customerName?: string;
   customerEmail?: string;
+  assignedRiderId?: number;
+  assignedRiderName?: string;
+  deliveryStatus?: string;
+}
+
+export interface Rider {
+  id: number;
+  name: string;
+  vehicleType: string;
+  licensePlate: string;
+  isAvailable: boolean;
+  rating: number;
 }
 
 export interface CreateOrderRequest {
@@ -441,8 +464,15 @@ export const adminApi = {
 
   // Orders management
   getAllOrders: () => api.get<Order[]>('/admin/orders'),
-  updateOrderStatus: (id: string, status: string) =>
-    api.patch(`/admin/orders/${id}/status`, { status }),
+  updateOrderStatus: (id: string, status: string, cancellationReason?: string) =>
+    api.patch(`/admin/orders/${id}/status`, { status, cancellationReason }),
+
+  // Rider management
+  getRiders: () => api.get<Rider[]>('/admin/riders'),
+  assignRider: (orderId: string, riderId: number) =>
+    api.post(`/admin/orders/${orderId}/assign-rider`, { riderId }),
+  unassignRider: (orderId: string) =>
+    api.delete(`/admin/orders/${orderId}/assign-rider`),
 
   // Reservations management
   getAllReservations: (date?: string) =>

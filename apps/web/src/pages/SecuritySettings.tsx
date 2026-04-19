@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { authApi, TwoFactorSetupResponse } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
+import LoadingOverlay from "@/components/LoadingOverlay";
 
 export default function SecuritySettings() {
   const { user, refreshUser } = useAuth();
@@ -77,6 +78,7 @@ export default function SecuritySettings() {
 
   return (
     <div className="min-h-screen bg-background">
+      {loading && <LoadingOverlay message="Processing..." />}
       <header className="sticky top-0 z-40 bg-primary text-primary-foreground">
         <div className="flex items-center justify-between px-6 py-4 sm:px-10">
           <Link to="/profile" className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.2em] hover:opacity-70 transition-opacity">

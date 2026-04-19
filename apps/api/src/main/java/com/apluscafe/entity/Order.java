@@ -62,6 +62,9 @@ public class Order {
     private LocalDateTime deliveredAt;
     private LocalDateTime cancelledAt;
 
+    @Column(columnDefinition = "TEXT")
+    private String cancellationReason;
+
     @CreationTimestamp
     private LocalDateTime createdAt;
 

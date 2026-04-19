@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ArrowLeft, Package, Clock, ChefHat, Truck, CheckCircle2, Circle, XCircle, RefreshCw, RotateCcw, Star, Download } from "lucide-react";
+import { ArrowLeft, Package, Clock, ChefHat, Truck, CheckCircle2, Circle, XCircle, RefreshCw, RotateCcw, Star, Download, MapPin } from "lucide-react";
 import { ordersApi, Order, reviewsApi } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { format, formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
 import { useCart } from "@/context/CartContext";
+import RiderTracker from "@/components/RiderTracker";
+import LoadingOverlay from "@/components/LoadingOverlay";
 
 const STATUS_STEPS = [
   { key: "confirmed", label: "Order Confirmed", icon: Package },
@@ -176,6 +178,9 @@ export default function Orders() {
 
   return (
     <div className="min-h-screen bg-background">
+      {(cancellingId || submittingReview || downloadingReceiptId) && (
+        <LoadingOverlay message={cancellingId ? "Cancelling order..." : submittingReview ? "Submitting review..." : "Downloading receipt..."} />
+      )}
       <header className="sticky top-0 z-40 bg-primary text-primary-foreground">
         <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 md:px-10">
           <Link to="/" className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.15em] sm:tracking-[0.2em] hover:opacity-70 transition-opacity">
@@ -274,6 +279,19 @@ export default function Orders() {
                     <div className="border-t border-border p-4 space-y-4">
                       <OrderTimeline order={order} />
 
+                      {/* Live Rider Tracking - Show when out for delivery */}
+                      {order.orderType === 'DELIVERY' &&
+                       (normalizeStatus(order.status) === 'out_for_delivery' ||
+                        normalizeStatus(order.status) === 'ready_for_pickup') && (
+                        <div className="border-t border-border pt-3">
+                          <h4 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1">
+                            <MapPin className="h-3 w-3" />
+                            Live Rider Tracking
+                          </h4>
+                          <RiderTracker orderId={order.id} />
+                        </div>
+                      )}
+
                       <div className="border-t border-border pt-3">
                         <h4 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2">Items</h4>
                         <div className="space-y-1">
@@ -303,6 +321,20 @@ export default function Orders() {
                           <p className="text-xs text-foreground bg-muted/30 p-2 rounded-lg" style={{ fontFamily: "'Space Mono', monospace" }}>
                             {order.notes}
                           </p>
+                        </div>
+                      )}
+
+                      {/* Cancellation Reason */}
+                      {normalizeStatus(order.status) === "cancelled" && order.cancellationReason && (
+                        <div className="border-t border-border pt-3">
+                          <h4 className="text-[10px] font-bold uppercase tracking-wider text-destructive mb-2">
+                            Cancellation Reason
+                          </h4>
+                          <div className="bg-destructive/5 border border-destructive/20 rounded-lg p-3">
+                            <p className="text-xs text-destructive" style={{ fontFamily: "'Space Mono', monospace" }}>
+                              {order.cancellationReason}
+                            </p>
+                          </div>
                         </div>
                       )}
 

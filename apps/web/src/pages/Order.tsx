@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ArrowLeft, ShoppingBag, Plus, Minus, Trash2, Truck, Store, UtensilsCrossed, Search } from "lucide-react";
+import { ArrowLeft, ShoppingBag, Plus, Minus, Trash2, Truck, Store, UtensilsCrossed, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useMenu } from "@/hooks/useMenu";
@@ -17,14 +17,43 @@ const orderTypeOptions = [
   { value: 'DINE_IN' as OrderType, label: 'Dine In', icon: UtensilsCrossed, description: 'Eat at our cafe' },
 ];
 
+interface SelectedTable {
+  id: number;
+  name: string;
+  seats: number;
+  section: string;
+}
+
 export default function Order() {
   const navigate = useNavigate();
   const [orderType, setOrderType] = useState<OrderType>('DELIVERY');
   const [activeCategory, setActiveCategory] = useState("All");
   const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedTable, setSelectedTable] = useState<SelectedTable | null>(null);
   const { menuItems, categories } = useMenu();
   const { items, addItem, updateQuantity, removeItem, totalItems, totalPrice } = useCart();
+
+  // Check for table selection from Cafe Floor Plan
+  useEffect(() => {
+    const storedTable = sessionStorage.getItem("selectedTable");
+    const storedOrderType = sessionStorage.getItem("orderType");
+
+    if (storedTable) {
+      try {
+        const table = JSON.parse(storedTable) as SelectedTable;
+        setSelectedTable(table);
+        sessionStorage.removeItem("selectedTable");
+      } catch (e) {
+        console.error("Failed to parse selected table:", e);
+      }
+    }
+
+    if (storedOrderType === "DINE_IN") {
+      setOrderType("DINE_IN");
+      sessionStorage.removeItem("orderType");
+    }
+  }, []);
 
   // Animation state tracking
   const [summaryAnimKey, setSummaryAnimKey] = useState(0);
@@ -74,6 +103,10 @@ export default function Order() {
   const handleProceedToCheckout = () => {
     // Store order type in session storage for checkout page
     sessionStorage.setItem('orderType', orderType);
+    // Store selected table info for dine-in orders
+    if (selectedTable && orderType === 'DINE_IN') {
+      sessionStorage.setItem('selectedTable', JSON.stringify(selectedTable));
+    }
     navigate('/checkout');
   };
 
@@ -133,6 +166,29 @@ export default function Order() {
           </div>
         </AnimateOnScroll>
 
+        {/* Selected Table Banner (when coming from Cafe Floor Plan) */}
+        {selectedTable && orderType === 'DINE_IN' && (
+          <div className="mb-6 p-4 rounded-xl bg-primary/5 border border-primary/20 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
+                <UtensilsCrossed className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <p className="text-sm font-bold">Table {selectedTable.name}</p>
+                <p className="text-xs text-muted-foreground" style={{ fontFamily: "'Space Mono', monospace" }}>
+                  {selectedTable.seats} seats • {selectedTable.section} section
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => setSelectedTable(null)}
+              className="p-1.5 rounded-full hover:bg-primary/10 transition-colors"
+            >
+              <X className="h-4 w-4 text-muted-foreground" />
+            </button>
+          </div>
+        )}
+
         <div className="lg:grid lg:grid-cols-3 lg:gap-10">
           {/* Menu Section */}
           <div className="lg:col-span-2">
@@ -156,6 +212,7 @@ export default function Order() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-10"
+                maxLength={100}
               />
             </div>
 

@@ -211,7 +211,7 @@ public class OrderService {
     }
 
     @Transactional
-    public OrderResponse updateOrderStatus(Long orderId, OrderStatus status) {
+    public OrderResponse updateOrderStatus(Long orderId, OrderStatus status, String cancellationReason) {
         log.info("Updating order {} status to: {}", orderId, status);
 
         Order order = orderRepository.findByIdWithItems(orderId)
@@ -227,15 +227,34 @@ public class OrderService {
             case CONFIRMED -> order.setConfirmedAt(LocalDateTime.now());
             case PREPARING -> order.setPreparingAt(LocalDateTime.now());
             case READY_FOR_PICKUP -> order.setReadyAt(LocalDateTime.now());
-            case DELIVERED -> order.setDeliveredAt(LocalDateTime.now());
+            case OUT_FOR_DELIVERY -> {
+                // Update delivery status when order goes out for delivery
+                deliveryRepository.findByOrderId(orderId).ifPresent(delivery -> {
+                    delivery.setStatus(DeliveryStatus.IN_TRANSIT);
+                    delivery.setPickedUpAt(LocalDateTime.now());
+                    deliveryRepository.save(delivery);
+                });
+            }
+            case DELIVERED -> {
+                order.setDeliveredAt(LocalDateTime.now());
+                // Update delivery status
+                deliveryRepository.findByOrderId(orderId).ifPresent(delivery -> {
+                    delivery.setStatus(DeliveryStatus.DELIVERED);
+                    delivery.setActualDeliveryTime(LocalDateTime.now());
+                    deliveryRepository.save(delivery);
+                });
+            }
+            case CANCELLED -> {
+                order.setCancelledAt(LocalDateTime.now());
+                order.setCancellationReason(cancellationReason);
+                // Cancel delivery if exists
+                deliveryRepository.findByOrderId(orderId).ifPresent(delivery -> {
+                    delivery.setStatus(DeliveryStatus.CANCELLED);
+                    deliveryRepository.save(delivery);
+                });
+            }
         }
         log.debug("Order {} status changed: {} -> {}", orderId, previousStatus, status);
-
-        // Auto-assign rider when order is confirmed for delivery
-        if (status == OrderStatus.CONFIRMED && order.getOrderType() == OrderType.DELIVERY) {
-            log.debug("Triggering auto-assign rider for delivery order: {}", orderId);
-            autoAssignRider(order);
-        }
 
         order = orderRepository.save(order);
         log.info("Order {} status updated successfully to: {}", orderId, status);
@@ -247,40 +266,6 @@ public class OrderService {
         notificationService.sendOrderStatusNotification(order, status);
 
         return OrderResponse.fromEntity(order);
-    }
-
-    private void autoAssignRider(Order order) {
-        log.debug("Auto-assigning rider for order: {}", order.getId());
-
-        Delivery delivery = deliveryRepository.findByOrderId(order.getId())
-                .orElse(null);
-
-        if (delivery == null) {
-            log.warn("No delivery record found for order: {}", order.getId());
-            return;
-        }
-
-        if (delivery.getRider() != null) {
-            log.debug("Rider already assigned to order: {}", order.getId());
-            return;
-        }
-
-        // Find available rider with least workload
-        List<RiderDetails> availableRiders = riderDetailsRepository.findAvailableRidersOrderByWorkloadAndRating();
-        log.debug("Found {} available riders", availableRiders.size());
-
-        if (!availableRiders.isEmpty()) {
-            RiderDetails rider = availableRiders.get(0);
-            delivery.setRider(rider);
-            delivery.setStatus(DeliveryStatus.ASSIGNED);
-            delivery.setAssignedAt(LocalDateTime.now());
-            delivery.setEstimatedDeliveryTime(LocalDateTime.now().plusMinutes(45));
-            deliveryRepository.save(delivery);
-            log.info("Rider {} assigned to order {}, ETA: 45 minutes",
-                    rider.getUser().getFullName(), order.getId());
-        } else {
-            log.warn("No available riders for order: {}", order.getId());
-        }
     }
 
     public List<OrderResponse> getActiveOrders() {
