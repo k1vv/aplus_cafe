@@ -14,6 +14,8 @@ DROP TABLE IF EXISTS announcements CASCADE;
 DROP TABLE IF EXISTS reservations CASCADE;
 DROP TABLE IF EXISTS reservation_slots CASCADE;
 DROP TABLE IF EXISTS cafe_tables CASCADE;
+DROP TABLE IF EXISTS closed_dates CASCADE;
+DROP TABLE IF EXISTS recurring_closures CASCADE;
 DROP TABLE IF EXISTS deliveries CASCADE;
 DROP TABLE IF EXISTS payments CASCADE;
 DROP TABLE IF EXISTS order_items CASCADE;
@@ -198,10 +200,34 @@ CREATE TABLE cafe_tables (
     capacity INTEGER NOT NULL,
     position_x DOUBLE PRECISION NOT NULL,
     position_y DOUBLE PRECISION NOT NULL,
+    width DOUBLE PRECISION NOT NULL DEFAULT 60,
+    height DOUBLE PRECISION NOT NULL DEFAULT 60,
     floor_section VARCHAR(50),
     shape VARCHAR(20) DEFAULT 'SQUARE',
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     CONSTRAINT chk_table_shape CHECK (shape IN ('ROUND', 'SQUARE', 'RECTANGULAR'))
+);
+
+-- ============================================
+-- 10a. CLOSED_DATES TABLE
+-- ============================================
+CREATE TABLE closed_dates (
+    id BIGSERIAL PRIMARY KEY,
+    date DATE NOT NULL UNIQUE,
+    reason VARCHAR(255),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ============================================
+-- 10b. RECURRING_CLOSURES TABLE
+-- ============================================
+CREATE TABLE recurring_closures (
+    id BIGSERIAL PRIMARY KEY,
+    day_of_week INTEGER NOT NULL,
+    reason VARCHAR(255),
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT chk_day_of_week CHECK (day_of_week >= 0 AND day_of_week <= 6)
 );
 
 -- ============================================
@@ -355,6 +381,13 @@ CREATE INDEX idx_password_reset_tokens_token ON password_reset_tokens(token);
 -- Completed orders indexes
 CREATE INDEX idx_completed_orders_user_id ON completed_orders(user_id);
 CREATE INDEX idx_completed_orders_completed_at ON completed_orders(completed_at);
+
+-- Closed dates indexes
+CREATE INDEX idx_closed_dates_date ON closed_dates(date);
+
+-- Recurring closures indexes
+CREATE INDEX idx_recurring_closures_day_of_week ON recurring_closures(day_of_week);
+CREATE INDEX idx_recurring_closures_is_active ON recurring_closures(is_active);
 
 -- ============================================
 -- TRIGGER FOR updated_at

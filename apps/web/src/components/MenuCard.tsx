@@ -1,5 +1,5 @@
 import { Plus } from "lucide-react";
-import { useCart } from "@/context/CartContext";
+import { useNavigate } from "react-router-dom";
 import { MenuItem } from "@/data/menuData";
 
 interface Props {
@@ -9,7 +9,13 @@ interface Props {
 }
 
 export default function MenuCard({ item, onSelect }: Props) {
-  const { addItem } = useCart();
+  const navigate = useNavigate();
+
+  const handleAddClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    // Redirect to Order page with item ID to auto-add
+    navigate(`/order?add=${item.id}`);
+  };
 
   return (
     <div
@@ -36,10 +42,7 @@ export default function MenuCard({ item, onSelect }: Props) {
           {item.price.toFixed(1)}
         </span>
         <button
-          onClick={(e) => {
-            e.stopPropagation();
-            addItem(item);
-          }}
+          onClick={handleAddClick}
           className="flex h-6 w-6 sm:h-7 sm:w-7 items-center justify-center rounded-full border border-primary/30 text-primary opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity hover:bg-primary hover:text-primary-foreground active:scale-95"
         >
           <Plus className="h-3 w-3 sm:h-3.5 sm:w-3.5" />

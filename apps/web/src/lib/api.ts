@@ -328,6 +328,41 @@ export const reservationsApi = {
   cancelReservation: (id: string) => api.delete(`/reservations/${id}`),
 };
 
+// Cafe API endpoints (public)
+export const cafeApi = {
+  // Get all tables
+  getTables: () => api.get<CafeTable[]>('/tables'),
+
+  // Check if cafe is open on a specific date
+  checkDate: (date: string) => api.get<DateCheckResponse>(`/cafe/check-date?date=${date}`),
+
+  // Get closed dates for a month (for calendar display)
+  getClosedDates: (month: string) => api.get<string[]>(`/cafe/closed-dates?month=${month}`),
+
+  // Get available tables for a specific date/time slot
+  getAvailableTables: (date: string, startTime: string, endTime: string, partySize: number) =>
+    api.get<CafeTable[]>(`/tables/available?date=${date}&startTime=${startTime}&endTime=${endTime}&partySize=${partySize}`),
+};
+
+export interface CafeTable {
+  id: number;
+  tableNumber: string;
+  capacity: number;
+  positionX: number;
+  positionY: number;
+  width: number;
+  height: number;
+  floorSection: string;
+  shape: 'ROUND' | 'SQUARE' | 'RECTANGULAR';
+  isActive: boolean;
+}
+
+export interface DateCheckResponse {
+  date: string;
+  open: boolean;
+  closedReason?: string;
+}
+
 export interface Reservation {
   id: string;
   userId: string;
@@ -343,11 +378,12 @@ export interface Reservation {
 }
 
 export interface CreateReservationRequest {
+  tableId: number;
   reservationDate: string;
   startTime: string;
+  endTime: string;
   partySize: number;
-  customerName: string;
-  customerPhone: string;
+  contactPhone?: string;
   specialRequests?: string;
 }
 
@@ -399,16 +435,20 @@ export interface Address {
   id: string;
   label: string;
   street: string;
-  city: string;
-  postalCode: string;
+  city?: string;
+  postalCode?: string;
+  lat?: number;
+  lng?: number;
   isDefault: boolean;
 }
 
 export interface CreateAddressRequest {
   label: string;
   street: string;
-  city: string;
-  postalCode: string;
+  city?: string;
+  postalCode?: string;
+  lat?: number;
+  lng?: number;
   isDefault?: boolean;
 }
 
@@ -482,9 +522,78 @@ export const adminApi = {
 
   // Users management
   getAllUsers: () => api.get<AdminUser[]>('/admin/users'),
-  toggleUserActive: (id: string, active: boolean) =>
-    api.patch(`/admin/users/${id}/active`, { active }),
+  deleteUser: (id: string) => api.delete(`/admin/users/${id}`),
+
+  // Rider management
+  createRider: (data: CreateRiderRequest) => api.post<AdminUser>('/admin/riders', data),
+
+  // Schedule management - Closed Dates
+  getClosedDates: (month?: string) =>
+    api.get<ClosedDate[]>(`/admin/closed-dates${month ? `?month=${month}` : ''}`),
+  addClosedDate: (date: string, reason?: string) =>
+    api.post<ClosedDate>('/admin/closed-dates', { date, reason }),
+  deleteClosedDate: (id: number) => api.delete(`/admin/closed-dates/${id}`),
+
+  // Schedule management - Recurring Closures
+  getRecurringClosures: () => api.get<RecurringClosure[]>('/admin/recurring-closures'),
+  addRecurringClosure: (dayOfWeek: number, reason?: string) =>
+    api.post<RecurringClosure>('/admin/recurring-closures', { dayOfWeek, reason }),
+  deleteRecurringClosure: (id: number) => api.delete(`/admin/recurring-closures/${id}`),
+  toggleRecurringClosure: (id: number) => api.patch<RecurringClosure>(`/admin/recurring-closures/${id}/toggle`),
 };
+
+export interface ClosedDate {
+  id: number;
+  date: string;
+  reason?: string;
+  createdAt: string;
+}
+
+export interface RecurringClosure {
+  id: number;
+  dayOfWeek: number; // 0=Sunday, 1=Monday, ..., 6=Saturday
+  reason?: string;
+  isActive: boolean;
+  createdAt: string;
+}
+
+// Image upload API
+export const imageApi = {
+  upload: async (file: File): Promise<{ data?: { url: string }; error?: string }> => {
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const token = localStorage.getItem(TOKEN_KEY);
+      const response = await fetch(`${API_BASE_URL}/images/upload`, {
+        method: 'POST',
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        return { error: errorData.message || 'Upload failed' };
+      }
+
+      const data = await response.json();
+      return { data };
+    } catch (error) {
+      return { error: 'Upload failed' };
+    }
+  },
+};
+
+export interface CreateRiderRequest {
+  email: string;
+  password: string;
+  fullName: string;
+  phone?: string;
+  vehicleType: string;
+  licensePlate: string;
+}
 
 export interface CreateMenuItemRequest {
   categoryId: number;
@@ -500,8 +609,8 @@ export interface AdminUser {
   email: string;
   fullName: string;
   phone?: string;
-  role: 'USER' | 'ADMIN';
-  isActive: boolean;
+  role: 'USER' | 'ADMIN' | 'RIDER';
+  emailVerified: boolean;
   createdAt: string;
 }
 

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowLeft, ShoppingBag, Plus, Minus, Trash2, Truck, Store, UtensilsCrossed, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,6 +26,7 @@ interface SelectedTable {
 
 export default function Order() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [orderType, setOrderType] = useState<OrderType>('DELIVERY');
   const [activeCategory, setActiveCategory] = useState("All");
   const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
@@ -33,6 +34,7 @@ export default function Order() {
   const [selectedTable, setSelectedTable] = useState<SelectedTable | null>(null);
   const { menuItems, categories } = useMenu();
   const { items, addItem, updateQuantity, removeItem, totalItems, totalPrice } = useCart();
+  const addedFromUrlRef = useRef<Set<string>>(new Set());
 
   // Check for table selection from Cafe Floor Plan
   useEffect(() => {
@@ -54,6 +56,20 @@ export default function Order() {
       sessionStorage.removeItem("orderType");
     }
   }, []);
+
+  // Auto-add item from URL parameter (when redirected from main page)
+  useEffect(() => {
+    const addItemId = searchParams.get("add");
+    if (addItemId && menuItems.length > 0 && !addedFromUrlRef.current.has(addItemId)) {
+      const itemToAdd = menuItems.find(item => item.id === Number(addItemId));
+      if (itemToAdd) {
+        addItem(itemToAdd);
+        addedFromUrlRef.current.add(addItemId);
+        // Clear the URL parameter
+        setSearchParams({}, { replace: true });
+      }
+    }
+  }, [searchParams, menuItems, addItem, setSearchParams]);
 
   // Animation state tracking
   const [summaryAnimKey, setSummaryAnimKey] = useState(0);

@@ -18,6 +18,8 @@ public class CafeTableResponse {
     private Integer capacity;
     private Double positionX;
     private Double positionY;
+    private Double width;
+    private Double height;
     private String floorSection;
     private TableShape shape;
     private Boolean isActive;
@@ -29,6 +31,8 @@ public class CafeTableResponse {
                 .capacity(table.getCapacity())
                 .positionX(table.getPositionX())
                 .positionY(table.getPositionY())
+                .width(table.getWidth())
+                .height(table.getHeight())
                 .floorSection(table.getFloorSection())
                 .shape(table.getShape())
                 .isActive(table.getIsActive())

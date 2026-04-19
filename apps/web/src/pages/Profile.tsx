@@ -1,13 +1,14 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { ArrowLeft, User, Mail, Phone, MapPin, Plus, Trash2, Edit2, Check, X, Star, Truck } from "lucide-react";
+import { ArrowLeft, User, Mail, Phone, MapPin, Plus, Trash2, Edit2, Check, X, Star, Navigation } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/context/AuthContext";
-import { userApi, Address, reservationsApi, Reservation, SavedDeliveryAddress } from "@/lib/api";
+import { userApi, Address, reservationsApi, Reservation } from "@/lib/api";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import LoadingOverlay from "@/components/LoadingOverlay";
+import LocationPicker from "@/components/LocationPicker";
 
 export default function Profile() {
   const { user, refreshUser } = useAuth();
@@ -19,32 +20,23 @@ export default function Profile() {
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [loadingAddresses, setLoadingAddresses] = useState(true);
   const [showAddAddress, setShowAddAddress] = useState(false);
-  const [newAddress, setNewAddress] = useState({ label: "", street: "", city: "", postalCode: "" });
+  const [editingAddressId, setEditingAddressId] = useState<string | null>(null);
+  const [addressLabel, setAddressLabel] = useState("");
+  const [selectedLocation, setSelectedLocation] = useState<{
+    lat: number;
+    lng: number;
+    address: string;
+    isWithinRange: boolean;
+  } | null>(null);
   const [savingAddress, setSavingAddress] = useState(false);
-
-  // Delivery address (saved from checkout)
-  const [deliveryAddress, setDeliveryAddress] = useState<SavedDeliveryAddress | null>(null);
-  const [loadingDeliveryAddress, setLoadingDeliveryAddress] = useState(true);
 
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [loadingReservations, setLoadingReservations] = useState(true);
 
   useEffect(() => {
     fetchAddresses();
-    fetchDeliveryAddress();
     fetchReservations();
   }, []);
-
-  const fetchDeliveryAddress = async () => {
-    setLoadingDeliveryAddress(true);
-    try {
-      const { data } = await userApi.getDeliveryAddress();
-      if (data) setDeliveryAddress(data);
-    } catch (error) {
-      console.error("Failed to fetch delivery address:", error);
-    }
-    setLoadingDeliveryAddress(false);
-  };
 
   const fetchAddresses = async () => {
     setLoadingAddresses(true);
@@ -74,25 +66,65 @@ export default function Profile() {
     setEditingProfile(false);
   };
 
-  const handleAddAddress = async () => {
-    if (!newAddress.label || !newAddress.street || !newAddress.city || !newAddress.postalCode) {
-      toast.error("Please fill in all address fields");
+  const handleLocationSelect = (location: { lat: number; lng: number; address: string; isWithinRange: boolean }) => {
+    setSelectedLocation(location);
+  };
+
+  const handleSaveAddress = async () => {
+    if (!addressLabel.trim()) {
+      toast.error("Please enter a label for this address");
+      return;
+    }
+    if (!selectedLocation) {
+      toast.error("Please select a location on the map");
+      return;
+    }
+    if (!selectedLocation.isWithinRange) {
+      toast.error("This location is outside our delivery area");
       return;
     }
 
     setSavingAddress(true);
-    const { error } = await userApi.addAddress(newAddress);
+
+    const addressData = {
+      label: addressLabel,
+      street: selectedLocation.address,
+      lat: selectedLocation.lat,
+      lng: selectedLocation.lng,
+      isDefault: addresses.length === 0, // First address is default
+    };
+
+    let result;
+    if (editingAddressId) {
+      result = await userApi.updateAddress(editingAddressId, addressData);
+    } else {
+      result = await userApi.addAddress(addressData);
+    }
+
     setSavingAddress(false);
 
-    if (error) {
-      toast.error("Failed to add address");
+    if (result.error) {
+      toast.error(editingAddressId ? "Failed to update address" : "Failed to add address");
       return;
     }
 
-    toast.success("Address added");
-    setNewAddress({ label: "", street: "", city: "", postalCode: "" });
-    setShowAddAddress(false);
+    toast.success(editingAddressId ? "Address updated" : "Address added");
+    resetAddressForm();
     fetchAddresses();
+  };
+
+  const handleEditAddress = (address: Address) => {
+    setEditingAddressId(address.id);
+    setAddressLabel(address.label);
+    if (address.lat && address.lng) {
+      setSelectedLocation({
+        lat: address.lat,
+        lng: address.lng,
+        address: address.street,
+        isWithinRange: true,
+      });
+    }
+    setShowAddAddress(true);
   };
 
   const handleDeleteAddress = async (id: string) => {
@@ -103,6 +135,27 @@ export default function Profile() {
     }
     toast.success("Address deleted");
     fetchAddresses();
+  };
+
+  const handleSetDefault = async (address: Address) => {
+    const { error } = await userApi.updateAddress(address.id, {
+      ...address,
+      street: address.street,
+      isDefault: true,
+    });
+    if (error) {
+      toast.error("Failed to set default address");
+      return;
+    }
+    toast.success("Default address updated");
+    fetchAddresses();
+  };
+
+  const resetAddressForm = () => {
+    setShowAddAddress(false);
+    setEditingAddressId(null);
+    setAddressLabel("");
+    setSelectedLocation(null);
   };
 
   const handleCancelReservation = async (id: string) => {
@@ -212,63 +265,68 @@ export default function Profile() {
           </div>
         </section>
 
-        {/* Delivery Address Section (saved from Checkout) */}
-        <section className="rounded-xl border border-border bg-card p-4 sm:p-6">
-          <h2 className="text-lg font-bold flex items-center gap-2 mb-4" style={{ fontFamily: "'DM Serif Display', serif" }}>
-            <Truck className="h-5 w-5 text-primary" />
-            Delivery Address
-          </h2>
-
-          {loadingDeliveryAddress ? (
-            <div className="flex justify-center py-8">
-              <div className="h-5 w-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-            </div>
-          ) : deliveryAddress ? (
-            <div className="p-3 rounded-lg bg-muted/30">
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-xs font-bold uppercase tracking-wider">Saved Location</span>
-                <span className="text-[9px] px-1.5 py-0.5 rounded bg-success/10 text-success font-bold">
-                  Active
-                </span>
-              </div>
-              <p className="text-xs text-muted-foreground" style={{ fontFamily: "'Space Mono', monospace" }}>
-                {deliveryAddress.address}
-              </p>
-              <p className="text-[10px] text-muted-foreground/70 mt-1" style={{ fontFamily: "'Space Mono', monospace" }}>
-                Coordinates: {deliveryAddress.lat.toFixed(6)}, {deliveryAddress.lng.toFixed(6)}
-              </p>
-            </div>
-          ) : (
-            <div className="text-center py-8">
-              <Truck className="mx-auto h-8 w-8 text-muted-foreground/30 mb-2" />
-              <p className="text-xs text-muted-foreground">No delivery address saved</p>
-              <p className="text-[10px] text-muted-foreground/70 mt-1" style={{ fontFamily: "'Space Mono', monospace" }}>
-                Save your delivery location during checkout
-              </p>
-            </div>
-          )}
-        </section>
-
-        {/* Addresses Section */}
+        {/* Delivery Addresses Section */}
         <section className="rounded-xl border border-border bg-card p-4 sm:p-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-bold flex items-center gap-2" style={{ fontFamily: "'DM Serif Display', serif" }}>
               <MapPin className="h-5 w-5 text-primary" />
-              Saved Addresses
+              Delivery Addresses
             </h2>
-            <Button variant="ghost" size="sm" onClick={() => setShowAddAddress(true)}>
-              <Plus className="h-4 w-4" />
-            </Button>
+            {!showAddAddress && (
+              <Button variant="ghost" size="sm" onClick={() => setShowAddAddress(true)}>
+                <Plus className="h-4 w-4" />
+              </Button>
+            )}
           </div>
 
           {loadingAddresses ? (
             <div className="flex justify-center py-8">
               <div className="h-5 w-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
             </div>
-          ) : addresses.length === 0 && !showAddAddress ? (
+          ) : showAddAddress ? (
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider mb-2 block">
+                  Address Label *
+                </label>
+                <Input
+                  placeholder="e.g., Home, Office, University"
+                  value={addressLabel}
+                  onChange={(e) => setAddressLabel(e.target.value)}
+                  maxLength={50}
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider mb-2 block">
+                  Location *
+                </label>
+                <LocationPicker
+                  onLocationSelect={handleLocationSelect}
+                  initialLocation={selectedLocation ? {
+                    lat: selectedLocation.lat,
+                    lng: selectedLocation.lng,
+                    address: selectedLocation.address,
+                  } : undefined}
+                />
+              </div>
+
+              <div className="flex gap-2 justify-end pt-2">
+                <Button variant="outline" size="sm" onClick={resetAddressForm}>
+                  Cancel
+                </Button>
+                <Button size="sm" onClick={handleSaveAddress} disabled={savingAddress}>
+                  {savingAddress ? "Saving..." : editingAddressId ? "Update Address" : "Save Address"}
+                </Button>
+              </div>
+            </div>
+          ) : addresses.length === 0 ? (
             <div className="text-center py-8">
               <MapPin className="mx-auto h-8 w-8 text-muted-foreground/30 mb-2" />
               <p className="text-xs text-muted-foreground">No saved addresses</p>
+              <p className="text-[10px] text-muted-foreground/70 mt-1" style={{ fontFamily: "'Space Mono', monospace" }}>
+                Add an address for faster checkout
+              </p>
               <Button variant="outline" size="sm" className="mt-3" onClick={() => setShowAddAddress(true)}>
                 <Plus className="h-3 w-3 mr-1" />
                 Add Address
@@ -277,64 +335,53 @@ export default function Profile() {
           ) : (
             <div className="space-y-3">
               {addresses.map((addr) => (
-                <div key={addr.id} className="flex items-start justify-between p-3 rounded-lg bg-muted/30">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold uppercase tracking-wider">{addr.label}</span>
-                      {addr.isDefault && (
-                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-bold flex items-center gap-0.5">
-                          <Star className="h-2.5 w-2.5" /> Default
-                        </span>
+                <div key={addr.id} className="p-3 rounded-lg bg-muted/30 border border-border">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-xs font-bold uppercase tracking-wider">{addr.label}</span>
+                        {addr.isDefault && (
+                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-bold flex items-center gap-0.5">
+                            <Star className="h-2.5 w-2.5" /> Default
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground" style={{ fontFamily: "'Space Mono', monospace" }}>
+                        {addr.street}
+                      </p>
+                      {addr.lat && addr.lng && (
+                        <a
+                          href={`https://www.google.com/maps?q=${addr.lat},${addr.lng}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-[10px] text-primary mt-1 hover:underline"
+                        >
+                          <Navigation className="h-3 w-3" />
+                          View on Map
+                        </a>
                       )}
                     </div>
-                    <p className="text-xs text-muted-foreground mt-1" style={{ fontFamily: "'Space Mono', monospace" }}>
-                      {addr.street}, {addr.city} {addr.postalCode}
-                    </p>
+                    <div className="flex items-center gap-1">
+                      {!addr.isDefault && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleSetDefault(addr)}
+                          className="text-xs text-muted-foreground hover:text-primary"
+                        >
+                          Set Default
+                        </Button>
+                      )}
+                      <Button variant="ghost" size="sm" onClick={() => handleEditAddress(addr)}>
+                        <Edit2 className="h-3.5 w-3.5 text-muted-foreground" />
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => handleDeleteAddress(addr.id)}>
+                        <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
+                      </Button>
+                    </div>
                   </div>
-                  <Button variant="ghost" size="sm" onClick={() => handleDeleteAddress(addr.id)}>
-                    <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
-                  </Button>
                 </div>
               ))}
-            </div>
-          )}
-
-          {showAddAddress && (
-            <div className="mt-4 p-4 rounded-lg border border-border space-y-3">
-              <Input
-                placeholder="Label (e.g., Home, Office)"
-                value={newAddress.label}
-                onChange={(e) => setNewAddress({ ...newAddress, label: e.target.value })}
-                maxLength={50}
-              />
-              <Input
-                placeholder="Street address"
-                value={newAddress.street}
-                onChange={(e) => setNewAddress({ ...newAddress, street: e.target.value })}
-                maxLength={255}
-              />
-              <div className="grid grid-cols-2 gap-3">
-                <Input
-                  placeholder="City"
-                  value={newAddress.city}
-                  onChange={(e) => setNewAddress({ ...newAddress, city: e.target.value })}
-                  maxLength={100}
-                />
-                <Input
-                  placeholder="Postal code"
-                  value={newAddress.postalCode}
-                  onChange={(e) => setNewAddress({ ...newAddress, postalCode: e.target.value })}
-                  maxLength={20}
-                />
-              </div>
-              <div className="flex gap-2 justify-end">
-                <Button variant="outline" size="sm" onClick={() => setShowAddAddress(false)}>
-                  Cancel
-                </Button>
-                <Button size="sm" onClick={handleAddAddress} disabled={savingAddress}>
-                  {savingAddress ? "Saving..." : "Save Address"}
-                </Button>
-              </div>
             </div>
           )}
         </section>

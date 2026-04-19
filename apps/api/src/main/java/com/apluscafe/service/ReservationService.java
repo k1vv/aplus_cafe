@@ -31,6 +31,7 @@ public class ReservationService {
     private final CafeTableRepository cafeTableRepository;
     private final ReservationSlotRepository reservationSlotRepository;
     private final UserRepository userRepository;
+    private final ScheduleService scheduleService;
 
     public List<CafeTableResponse> getAllTables() {
         log.debug("Fetching all active tables");
@@ -85,6 +86,15 @@ public class ReservationService {
                     log.error("Table not found for reservation: {}", request.getTableId());
                     return new RuntimeException("Table not found");
                 });
+
+        // Check if cafe is open on the requested date
+        if (!scheduleService.isOpenOnDate(request.getReservationDate())) {
+            String reason = scheduleService.getClosedReason(request.getReservationDate());
+            log.warn("Attempted reservation on closed date: {} - reason: {}",
+                    request.getReservationDate(), reason);
+            throw new RuntimeException("The cafe is closed on this date" +
+                    (reason != null ? ": " + reason : ""));
+        }
 
         // Check capacity
         if (request.getPartySize() > table.getCapacity()) {

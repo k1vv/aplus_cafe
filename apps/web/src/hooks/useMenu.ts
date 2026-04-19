@@ -1,22 +1,13 @@
-import { useEffect, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { menuApi, CategoryResponse } from "@/lib/api";
 import { MenuItem, mapApiToMenuItem, menuItems as staticMenuItems, categories as staticCategories } from "@/data/menuData";
 
 export function useMenu() {
-  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
-  const [categories, setCategories] = useState<string[]>(["All"]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
-  useEffect(() => {
-    fetchMenuData();
-  }, []);
-
-  const fetchMenuData = async () => {
-    setLoading(true);
-    setError(null);
-
-    try {
+  const { data: menuData, isLoading: menuLoading, error: menuError } = useQuery({
+    queryKey: ["menu"],
+    queryFn: async () => {
       const [menuResult, categoriesResult] = await Promise.all([
         menuApi.getMenuItems(),
         menuApi.getCategories(),
@@ -25,37 +16,45 @@ export function useMenu() {
       if (menuResult.error || !menuResult.data || menuResult.data.length === 0) {
         // Fallback to static data if API fails
         console.warn("Using fallback static menu data");
-        setMenuItems(staticMenuItems);
-        setCategories(staticCategories);
-      } else {
-        // Map API response to MenuItem format
-        const mappedItems = menuResult.data.map(mapApiToMenuItem);
-        setMenuItems(mappedItems);
-
-        // Build categories list
-        if (categoriesResult.data && categoriesResult.data.length > 0) {
-          const categoryNames = categoriesResult.data
-            .sort((a, b) => a.displayOrder - b.displayOrder)
-            .map((c) => c.name);
-          setCategories(["All", ...categoryNames]);
-        } else {
-          // Extract unique categories from menu items
-          const uniqueCategories = [...new Set(mappedItems.map((item) => item.category))];
-          setCategories(["All", ...uniqueCategories]);
-        }
+        return {
+          menuItems: staticMenuItems,
+          categories: staticCategories,
+        };
       }
-    } catch (err) {
-      console.error("Failed to load menu from API, using fallback:", err);
-      setMenuItems(staticMenuItems);
-      setCategories(staticCategories);
-    } finally {
-      setLoading(false);
-    }
-  };
+
+      // Map API response to MenuItem format
+      const mappedItems = menuResult.data.map(mapApiToMenuItem);
+
+      // Build categories list
+      let categoryNames: string[];
+      if (categoriesResult.data && categoriesResult.data.length > 0) {
+        categoryNames = ["All", ...categoriesResult.data
+          .sort((a, b) => a.displayOrder - b.displayOrder)
+          .map((c) => c.name)];
+      } else {
+        // Extract unique categories from menu items
+        const uniqueCategories = [...new Set(mappedItems.map((item) => item.category))];
+        categoryNames = ["All", ...uniqueCategories];
+      }
+
+      return {
+        menuItems: mappedItems,
+        categories: categoryNames,
+      };
+    },
+    staleTime: 10 * 60 * 1000, // Menu stays fresh for 10 minutes
+    gcTime: 60 * 60 * 1000, // Keep in cache for 1 hour
+  });
 
   const refresh = () => {
-    fetchMenuData();
+    queryClient.invalidateQueries({ queryKey: ["menu"] });
   };
 
-  return { menuItems, categories, loading, error, refresh };
+  return {
+    menuItems: menuData?.menuItems || [],
+    categories: menuData?.categories || ["All"],
+    loading: menuLoading,
+    error: menuError ? String(menuError) : null,
+    refresh,
+  };
 }

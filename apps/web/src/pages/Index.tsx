@@ -6,7 +6,6 @@ import VibeSection from "@/components/VibeSection";
 import CategoryFilter from "@/components/CategoryFilter";
 import MenuCard from "@/components/MenuCard";
 import MenuItemModal from "@/components/MenuItemModal";
-import CartDrawer from "@/components/CartDrawer";
 import Footer from "@/components/Footer";
 import AnimateOnScroll from "@/components/AnimateOnScroll";
 import { MenuItem } from "@/data/menuData";
@@ -85,7 +84,6 @@ export default function Index() {
       </section>
 
       <Footer />
-      <CartDrawer />
 
       {selectedItem && (
         <MenuItemModal item={selectedItem} onClose={() => setSelectedItem(null)} />

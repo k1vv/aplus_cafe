@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { ArrowLeft, CreditCard, MapPin, Phone, User, Clock, Store, Truck, UtensilsCrossed, Save, Loader2, HandMetal, Navigation } from "lucide-react";
+import { ArrowLeft, CreditCard, MapPin, Phone, User, Clock, Store, Truck, UtensilsCrossed, Save, Loader2, HandMetal, Navigation, ChevronDown, Plus, Star } from "lucide-react";
 import { EmbeddedCheckoutProvider, EmbeddedCheckout } from "@stripe/react-stripe-js";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,7 +10,7 @@ import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
 import { PaymentTestModeBanner } from "@/components/PaymentTestModeBanner";
 import { getStripe } from "@/lib/stripe";
-import { checkoutApi, userApi } from "@/lib/api";
+import { checkoutApi, userApi, Address } from "@/lib/api";
 import { SHOP_LOCATION } from "@/lib/constants";
 import { toast } from "sonner";
 import LocationPicker from "@/components/LocationPicker";
@@ -41,6 +41,13 @@ export default function Checkout() {
     contactless: false,
   });
 
+  // Saved addresses
+  const [savedAddresses, setSavedAddresses] = useState<Address[]>([]);
+  const [loadingAddresses, setLoadingAddresses] = useState(false);
+  const [showAddressPicker, setShowAddressPicker] = useState(false);
+  const [showNewAddressForm, setShowNewAddressForm] = useState(false);
+  const [newAddressLabel, setNewAddressLabel] = useState("");
+
   // Location picker state
   const [selectedLocation, setSelectedLocation] = useState<{
     lat: number;
@@ -48,46 +55,39 @@ export default function Checkout() {
     address: string;
     isWithinRange: boolean;
   } | null>(null);
-  const [savedLocation, setSavedLocation] = useState<{
-    lat: number;
-    lng: number;
-    address: string;
-  } | null>(null);
   const [saveAddress, setSaveAddress] = useState(false);
   const [isSavingAddress, setIsSavingAddress] = useState(false);
-  const [isLoadingAddress, setIsLoadingAddress] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
 
-  // Load saved delivery address on mount
+  // Load saved addresses on mount
   useEffect(() => {
-    const loadSavedAddress = async () => {
+    const loadAddresses = async () => {
       if (user) {
-        setIsLoadingAddress(true);
+        setLoadingAddresses(true);
         try {
-          const { data } = await userApi.getDeliveryAddress();
-          if (data) {
-            setSavedLocation({
-              lat: data.lat,
-              lng: data.lng,
-              address: data.address,
-            });
-            // Auto-select saved location
-            setSelectedLocation({
-              lat: data.lat,
-              lng: data.lng,
-              address: data.address,
-              isWithinRange: true, // Will be validated by LocationPicker
-            });
-            setForm(prev => ({ ...prev, address: data.address }));
+          const { data } = await userApi.getAddresses();
+          if (data && data.length > 0) {
+            setSavedAddresses(data);
+            // Auto-select default address
+            const defaultAddr = data.find(a => a.isDefault) || data[0];
+            if (defaultAddr && defaultAddr.lat && defaultAddr.lng) {
+              setSelectedLocation({
+                lat: defaultAddr.lat,
+                lng: defaultAddr.lng,
+                address: defaultAddr.street,
+                isWithinRange: true,
+              });
+              setForm(prev => ({ ...prev, address: defaultAddr.street }));
+            }
           }
         } catch (error) {
-          console.error("Failed to load saved address:", error);
+          console.error("Failed to load addresses:", error);
         } finally {
-          setIsLoadingAddress(false);
+          setLoadingAddresses(false);
         }
       }
     };
-    loadSavedAddress();
+    loadAddresses();
   }, [user]);
 
   useEffect(() => {
@@ -110,27 +110,50 @@ export default function Checkout() {
     setForm(prev => ({ ...prev, address: location.address }));
   };
 
-  const handleSaveAddress = async () => {
-    if (!selectedLocation || !user) return;
+  const handleSelectSavedAddress = (address: Address) => {
+    if (address.lat && address.lng) {
+      setSelectedLocation({
+        lat: address.lat,
+        lng: address.lng,
+        address: address.street,
+        isWithinRange: true,
+      });
+      setForm(prev => ({ ...prev, address: address.street }));
+    }
+    setShowAddressPicker(false);
+  };
+
+  const handleSaveNewAddress = async () => {
+    if (!selectedLocation || !newAddressLabel.trim()) {
+      toast.error("Please enter a label and select a location");
+      return;
+    }
 
     setIsSavingAddress(true);
     try {
-      await userApi.saveDeliveryAddress({
-        address: selectedLocation.address,
+      const { error } = await userApi.addAddress({
+        label: newAddressLabel,
+        street: selectedLocation.address,
         lat: selectedLocation.lat,
         lng: selectedLocation.lng,
+        isDefault: savedAddresses.length === 0,
       });
-      setSavedLocation({
-        lat: selectedLocation.lat,
-        lng: selectedLocation.lng,
-        address: selectedLocation.address,
-      });
-      toast.success("Delivery address saved to your profile");
+
+      if (error) {
+        toast.error("Failed to save address");
+      } else {
+        toast.success("Address saved");
+        // Refresh addresses
+        const { data } = await userApi.getAddresses();
+        if (data) setSavedAddresses(data);
+      }
     } catch (error) {
       toast.error("Failed to save address");
-      console.error("Failed to save address:", error);
     } finally {
       setIsSavingAddress(false);
+      setShowNewAddressForm(false);
+      setNewAddressLabel("");
+      setSaveAddress(false);
     }
   };
 
@@ -144,7 +167,7 @@ export default function Checkout() {
 
     if (orderType === 'DELIVERY') {
       if (!selectedLocation) {
-        toast.error("Please select your delivery location on the map");
+        toast.error("Please select your delivery location");
         return;
       }
       if (!selectedLocation.isWithinRange) {
@@ -161,8 +184,8 @@ export default function Checkout() {
     setIsProcessing(true);
 
     // Save address if checkbox is checked
-    if (saveAddress && selectedLocation && user) {
-      await handleSaveAddress();
+    if (saveAddress && selectedLocation && user && newAddressLabel.trim()) {
+      await handleSaveNewAddress();
     }
 
     setShowPayment(true);
@@ -228,8 +251,8 @@ export default function Checkout() {
 
   return (
     <div className="min-h-screen bg-background">
-      {(isProcessing || isSavingAddress || isLoadingAddress) && (
-        <LoadingOverlay message={isLoadingAddress ? "Loading saved address..." : isSavingAddress ? "Saving address..." : "Processing..."} />
+      {(isProcessing || isSavingAddress || loadingAddresses) && (
+        <LoadingOverlay message={loadingAddresses ? "Loading addresses..." : isSavingAddress ? "Saving address..." : "Processing..."} />
       )}
       <PaymentTestModeBanner />
       <header className="sticky top-0 z-40 bg-primary text-primary-foreground">
@@ -300,16 +323,119 @@ export default function Checkout() {
                       <Label className="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 mb-2">
                         <MapPin className="h-3.5 w-3.5" />Delivery Location *
                       </Label>
-                      {isLoadingAddress ? (
-                        <div className="flex items-center justify-center py-8 border rounded-xl">
-                          <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                          <span className="ml-2 text-sm text-muted-foreground">Loading saved address...</span>
+
+                      {/* Saved Addresses Selector */}
+                      {savedAddresses.length > 0 && (
+                        <div className="mb-3">
+                          <button
+                            type="button"
+                            onClick={() => setShowAddressPicker(!showAddressPicker)}
+                            className="w-full flex items-center justify-between p-3 rounded-lg border border-border bg-muted/30 hover:bg-muted/50 transition-colors text-left"
+                          >
+                            <div className="flex items-center gap-2">
+                              <MapPin className="h-4 w-4 text-primary" />
+                              <div>
+                                <p className="text-sm font-medium">
+                                  {selectedLocation ? 'Selected Address' : 'Choose from saved addresses'}
+                                </p>
+                                {selectedLocation && (
+                                  <p className="text-xs text-muted-foreground truncate max-w-[250px]" style={{ fontFamily: "'Space Mono', monospace" }}>
+                                    {selectedLocation.address}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                            <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${showAddressPicker ? 'rotate-180' : ''}`} />
+                          </button>
+
+                          {showAddressPicker && (
+                            <div className="mt-2 p-2 rounded-lg border border-border bg-card space-y-2">
+                              {savedAddresses.map((addr) => (
+                                <button
+                                  key={addr.id}
+                                  type="button"
+                                  onClick={() => handleSelectSavedAddress(addr)}
+                                  className={`w-full flex items-start gap-3 p-3 rounded-lg text-left transition-colors ${
+                                    selectedLocation?.address === addr.street
+                                      ? 'bg-primary/10 border border-primary/30'
+                                      : 'hover:bg-muted/50'
+                                  }`}
+                                >
+                                  <MapPin className="h-4 w-4 text-primary mt-0.5 shrink-0" />
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-xs font-bold uppercase tracking-wider">{addr.label}</span>
+                                      {addr.isDefault && (
+                                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-bold flex items-center gap-0.5">
+                                          <Star className="h-2.5 w-2.5" /> Default
+                                        </span>
+                                      )}
+                                    </div>
+                                    <p className="text-xs text-muted-foreground truncate" style={{ fontFamily: "'Space Mono', monospace" }}>
+                                      {addr.street}
+                                    </p>
+                                  </div>
+                                </button>
+                              ))}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setShowAddressPicker(false);
+                                  setShowNewAddressForm(true);
+                                  setSelectedLocation(null);
+                                }}
+                                className="w-full flex items-center gap-2 p-3 rounded-lg text-left hover:bg-muted/50 text-primary"
+                              >
+                                <Plus className="h-4 w-4" />
+                                <span className="text-xs font-bold uppercase tracking-wider">Use New Address</span>
+                              </button>
+                            </div>
+                          )}
                         </div>
-                      ) : (
-                        <LocationPicker
-                          onLocationSelect={handleLocationSelect}
-                          initialLocation={savedLocation}
-                        />
+                      )}
+
+                      {/* Map Picker - Show when no saved addresses or using new address */}
+                      {(savedAddresses.length === 0 || showNewAddressForm) && (
+                        <>
+                          <LocationPicker
+                            onLocationSelect={handleLocationSelect}
+                            initialLocation={selectedLocation ? {
+                              lat: selectedLocation.lat,
+                              lng: selectedLocation.lng,
+                              address: selectedLocation.address,
+                            } : undefined}
+                          />
+
+                          {/* Save new address option */}
+                          {user && selectedLocation && selectedLocation.isWithinRange && (
+                            <div className="mt-3 space-y-3">
+                              <label className="flex items-center gap-3 p-3 rounded-lg border border-border bg-muted/30 cursor-pointer hover:bg-muted/50 transition-colors">
+                                <input
+                                  type="checkbox"
+                                  checked={saveAddress}
+                                  onChange={(e) => setSaveAddress(e.target.checked)}
+                                  className="h-4 w-4 rounded border-border"
+                                />
+                                <div className="flex-1">
+                                  <span className="text-sm font-medium">Save this address</span>
+                                  <p className="text-xs text-muted-foreground" style={{ fontFamily: "'Space Mono', monospace" }}>
+                                    Use this location for future orders
+                                  </p>
+                                </div>
+                                <Save className="h-4 w-4 text-muted-foreground" />
+                              </label>
+
+                              {saveAddress && (
+                                <Input
+                                  placeholder="Address label (e.g., Home, Office)"
+                                  value={newAddressLabel}
+                                  onChange={(e) => setNewAddressLabel(e.target.value)}
+                                  maxLength={50}
+                                />
+                              )}
+                            </div>
+                          )}
+                        </>
                       )}
                     </div>
 
@@ -329,25 +455,6 @@ export default function Checkout() {
                       </div>
                       <HandMetal className="h-4 w-4 text-muted-foreground" />
                     </label>
-
-                    {/* Save address checkbox - only show if user is logged in */}
-                    {user && selectedLocation && selectedLocation.isWithinRange && (
-                      <label className="flex items-center gap-3 p-3 rounded-lg border border-border bg-muted/30 cursor-pointer hover:bg-muted/50 transition-colors">
-                        <input
-                          type="checkbox"
-                          checked={saveAddress}
-                          onChange={(e) => setSaveAddress(e.target.checked)}
-                          className="h-4 w-4 rounded border-border"
-                        />
-                        <div className="flex-1">
-                          <span className="text-sm font-medium">Save this address to my profile</span>
-                          <p className="text-xs text-muted-foreground" style={{ fontFamily: "'Space Mono', monospace" }}>
-                            Use this location for future orders
-                          </p>
-                        </div>
-                        <Save className="h-4 w-4 text-muted-foreground" />
-                      </label>
-                    )}
                   </div>
                 )}
 

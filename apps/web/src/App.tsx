@@ -8,7 +8,7 @@ import { AuthProvider } from "@/context/AuthContext";
 import { ThemeProvider } from "@/context/ThemeContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import Index from "./pages/Index.tsx";
-import BookTable from "./pages/BookTable.tsx";
+import TableBooking from "./pages/TableBooking.tsx";
 import Delivery from "./pages/Delivery.tsx";
 import Order from "./pages/Order.tsx";
 import Checkout from "./pages/Checkout.tsx";
@@ -24,9 +24,18 @@ import VerifyEmail from "./pages/VerifyEmail.tsx";
 import ForgotPassword from "./pages/ForgotPassword.tsx";
 import ResetPassword from "./pages/ResetPassword.tsx";
 import SecuritySettings from "./pages/SecuritySettings.tsx";
-import CafeLayout from "./pages/CafeLayout.tsx";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 5 * 60 * 1000, // 5 minutes - data stays fresh
+      gcTime: 30 * 60 * 1000, // 30 minutes - cache kept in memory (formerly cacheTime)
+      refetchOnWindowFocus: false, // Don't refetch when switching tabs
+      refetchOnMount: false, // Don't refetch when component mounts if data exists
+      retry: 1, // Only retry once on failure
+    },
+  },
+});
 
 const App = () => (
   <ThemeProvider>
@@ -44,15 +53,10 @@ const App = () => (
               <Route path="/forgot-password" element={<ForgotPassword />} />
               <Route path="/reset-password" element={<ResetPassword />} />
 
-              {/* Protected Routes - require authentication */}
-              <Route path="/cafe" element={
-                <ProtectedRoute>
-                  <CafeLayout />
-                </ProtectedRoute>
-              } />
+              {/* Public route - table booking with floor plan */}
               <Route path="/book" element={
                 <ProtectedRoute>
-                  <BookTable />
+                  <TableBooking />
                 </ProtectedRoute>
               } />
               <Route path="/delivery" element={

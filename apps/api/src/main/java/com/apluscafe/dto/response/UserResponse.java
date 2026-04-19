@@ -21,6 +21,7 @@ public class UserResponse {
     private Boolean emailVerified;
     private Boolean twoFactorEnabled;
     private DeliveryAddress deliveryAddress;
+    private String createdAt;
 
     @Data
     @Builder
@@ -51,6 +52,7 @@ public class UserResponse {
                 .emailVerified(user.getEmailVerified())
                 .twoFactorEnabled(user.getTwoFactorEnabled())
                 .deliveryAddress(deliveryAddr)
+                .createdAt(user.getCreatedAt() != null ? user.getCreatedAt().toString() : null)
                 .build();
     }
 }

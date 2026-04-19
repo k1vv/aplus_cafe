@@ -1,9 +1,16 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Users, Coffee, UtensilsCrossed, CalendarDays, ShoppingBag, X, DoorOpen, Sofa } from "lucide-react";
+import {
+  Users,
+  CalendarDays,
+  ShoppingBag,
+  X,
+  Sofa,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { CafeTable } from "@/lib/api";
 
-interface Table {
+export interface FloorPlanTable {
   id: number;
   name: string;
   seats: number;
@@ -13,114 +20,149 @@ interface Table {
   height: number;
   shape: "rect" | "circle" | "oval";
   status: "available" | "occupied" | "reserved";
-  section: "window" | "center" | "corner" | "outdoor";
+  section: string;
 }
 
-// Cafe layout configuration
-const tables: Table[] = [
-  // Window Section (left side) - cozy 2-seater tables
-  { id: 1, name: "W1", seats: 2, x: 40, y: 80, width: 60, height: 60, shape: "circle", status: "available", section: "window" },
-  { id: 2, name: "W2", seats: 2, x: 40, y: 180, width: 60, height: 60, shape: "circle", status: "occupied", section: "window" },
-  { id: 3, name: "W3", seats: 2, x: 40, y: 280, width: 60, height: 60, shape: "circle", status: "available", section: "window" },
-  { id: 4, name: "W4", seats: 2, x: 40, y: 380, width: 60, height: 60, shape: "circle", status: "reserved", section: "window" },
+// Convert API CafeTable to FloorPlanTable format
+export function convertApiTable(table: CafeTable, isReserved: boolean = false): FloorPlanTable {
+  const shapeMap: Record<string, "rect" | "circle" | "oval"> = {
+    'ROUND': 'circle',
+    'SQUARE': 'rect',
+    'RECTANGULAR': 'rect',
+  };
 
-  // Center Section - 4-seater rectangular tables
-  { id: 5, name: "C1", seats: 4, x: 180, y: 100, width: 100, height: 70, shape: "rect", status: "available", section: "center" },
-  { id: 6, name: "C2", seats: 4, x: 180, y: 220, width: 100, height: 70, shape: "rect", status: "available", section: "center" },
-  { id: 7, name: "C3", seats: 4, x: 180, y: 340, width: 100, height: 70, shape: "rect", status: "occupied", section: "center" },
+  return {
+    id: table.id,
+    name: table.tableNumber,
+    seats: table.capacity,
+    x: table.positionX,
+    y: table.positionY,
+    width: table.width,
+    height: table.height,
+    shape: shapeMap[table.shape] || 'rect',
+    status: isReserved ? 'reserved' : 'available',
+    section: table.floorSection,
+  };
+}
 
-  // Center Section - 4-seater tables (right of center)
-  { id: 8, name: "C4", seats: 4, x: 340, y: 100, width: 100, height: 70, shape: "rect", status: "available", section: "center" },
-  { id: 9, name: "C5", seats: 4, x: 340, y: 220, width: 100, height: 70, shape: "reserved", section: "center" },
-  { id: 10, name: "C6", seats: 4, x: 340, y: 340, width: 100, height: 70, shape: "rect", status: "available", section: "center" },
-
-  // Corner Section (right side) - larger 6-seater tables
-  { id: 11, name: "L1", seats: 6, x: 500, y: 80, width: 120, height: 80, shape: "oval", status: "available", section: "corner" },
-  { id: 12, name: "L2", seats: 6, x: 500, y: 220, width: 120, height: 80, shape: "oval", status: "available", section: "corner" },
-  { id: 13, name: "L3", seats: 8, x: 500, y: 360, width: 130, height: 90, shape: "oval", status: "occupied", section: "corner" },
-
-  // Outdoor Section (bottom)
-  { id: 14, name: "O1", seats: 4, x: 120, y: 500, width: 80, height: 60, shape: "rect", status: "available", section: "outdoor" },
-  { id: 15, name: "O2", seats: 4, x: 250, y: 500, width: 80, height: 60, shape: "rect", status: "available", section: "outdoor" },
-  { id: 16, name: "O3", seats: 4, x: 380, y: 500, width: 80, height: 60, shape: "rect", status: "reserved", section: "outdoor" },
+// Default tables for backward compatibility (when no tables prop provided)
+const defaultTables: FloorPlanTable[] = [
+  // Window section
+  { id: 1, name: "W1", seats: 2, x: 55, y: 90, width: 60, height: 60, shape: "circle", status: "available", section: "window" },
+  { id: 2, name: "W2", seats: 2, x: 55, y: 190, width: 60, height: 60, shape: "circle", status: "available", section: "window" },
+  { id: 3, name: "W3", seats: 2, x: 55, y: 290, width: 60, height: 60, shape: "circle", status: "available", section: "window" },
+  { id: 4, name: "W4", seats: 2, x: 55, y: 390, width: 60, height: 60, shape: "circle", status: "available", section: "window" },
+  // Main dining
+  { id: 5, name: "C1", seats: 4, x: 190, y: 110, width: 100, height: 70, shape: "rect", status: "available", section: "center" },
+  { id: 6, name: "C2", seats: 4, x: 190, y: 230, width: 100, height: 70, shape: "rect", status: "available", section: "center" },
+  { id: 7, name: "C3", seats: 4, x: 190, y: 350, width: 100, height: 70, shape: "rect", status: "available", section: "center" },
+  { id: 8, name: "C4", seats: 4, x: 350, y: 110, width: 100, height: 70, shape: "rect", status: "available", section: "center" },
+  { id: 9, name: "C5", seats: 4, x: 350, y: 230, width: 100, height: 70, shape: "rect", status: "available", section: "center" },
+  { id: 10, name: "C6", seats: 4, x: 350, y: 350, width: 100, height: 70, shape: "rect", status: "available", section: "center" },
+  // Group area
+  { id: 11, name: "L1", seats: 6, x: 510, y: 160, width: 120, height: 80, shape: "oval", status: "available", section: "corner" },
+  { id: 12, name: "L2", seats: 6, x: 510, y: 270, width: 120, height: 80, shape: "oval", status: "available", section: "corner" },
+  { id: 13, name: "L3", seats: 8, x: 510, y: 380, width: 120, height: 80, shape: "oval", status: "available", section: "corner" },
+  // Outdoor patio
+  { id: 14, name: "O1", seats: 4, x: 135, y: 520, width: 80, height: 60, shape: "rect", status: "available", section: "outdoor" },
+  { id: 15, name: "O2", seats: 4, x: 255, y: 520, width: 80, height: 60, shape: "rect", status: "available", section: "outdoor" },
+  { id: 16, name: "O3", seats: 4, x: 375, y: 520, width: 80, height: 60, shape: "rect", status: "available", section: "outdoor" },
 ];
 
 interface CafeFloorPlanProps {
-  onTableSelect?: (table: Table, action: "order" | "book") => void;
+  tables?: FloorPlanTable[];
+  reservedTableIds?: number[];
+  onTableSelect?: (table: FloorPlanTable) => void;
+  showModal?: boolean;
+  selectedTableId?: number | null;
 }
 
-export default function CafeFloorPlan({ onTableSelect }: CafeFloorPlanProps) {
+export default function CafeFloorPlan({
+  tables,
+  reservedTableIds = [],
+  onTableSelect,
+  showModal = true,
+  selectedTableId
+}: CafeFloorPlanProps) {
   const navigate = useNavigate();
-  const [selectedTable, setSelectedTable] = useState<Table | null>(null);
+  const [internalSelectedTable, setInternalSelectedTable] = useState<FloorPlanTable | null>(null);
   const [hoveredTable, setHoveredTable] = useState<number | null>(null);
 
-  const getStatusColor = (status: Table["status"], isHovered: boolean) => {
-    const colors = {
-      available: isHovered ? "#16a34a" : "#22c55e",
-      occupied: "#ef4444",
-      reserved: "#f59e0b",
-    };
-    return colors[status];
+  // Use provided tables or default
+  const displayTables = tables || defaultTables;
+
+  // Apply reservation status
+  const tablesWithStatus = displayTables.map(table => ({
+    ...table,
+    status: reservedTableIds.includes(table.id) ? 'reserved' as const : table.status
+  }));
+
+  const selectedTable = selectedTableId
+    ? tablesWithStatus.find(t => t.id === selectedTableId) || null
+    : internalSelectedTable;
+
+  const getStatusColor = (status: FloorPlanTable["status"], isHovered: boolean) => {
+    if (status === "available") return isHovered ? "#16a34a" : "#22c55e";
+    if (status === "occupied") return "#ef4444";
+    return "#f59e0b";
   };
 
-  const getStatusBg = (status: Table["status"], isHovered: boolean) => {
-    const colors = {
-      available: isHovered ? "rgba(22, 163, 74, 0.3)" : "rgba(34, 197, 94, 0.2)",
-      occupied: "rgba(239, 68, 68, 0.2)",
-      reserved: "rgba(245, 158, 11, 0.2)",
-    };
-    return colors[status];
+  const getStatusBg = (status: FloorPlanTable["status"], isHovered: boolean) => {
+    if (status === "available") return isHovered ? "rgba(34,197,94,0.28)" : "rgba(34,197,94,0.16)";
+    if (status === "occupied") return "rgba(239,68,68,0.15)";
+    return "rgba(245,158,11,0.18)";
   };
 
-  const handleTableClick = (table: Table) => {
+  const handleTableClick = (table: FloorPlanTable) => {
     if (table.status === "occupied") return;
-    setSelectedTable(table);
+
+    if (onTableSelect) {
+      onTableSelect(table);
+    } else {
+      setInternalSelectedTable(table);
+    }
   };
 
   const handleAction = (action: "order" | "book") => {
     if (!selectedTable) return;
 
-    if (onTableSelect) {
-      onTableSelect(selectedTable, action);
+    sessionStorage.setItem("selectedTable", JSON.stringify(selectedTable));
+
+    if (action === "order") {
+      sessionStorage.setItem("orderType", "DINE_IN");
+      navigate("/order");
     } else {
-      if (action === "order") {
-        // Store table info and navigate to order page
-        sessionStorage.setItem("selectedTable", JSON.stringify(selectedTable));
-        sessionStorage.setItem("orderType", "DINE_IN");
-        navigate("/order");
-      } else {
-        // Navigate to booking page with table pre-selected
-        sessionStorage.setItem("selectedTable", JSON.stringify(selectedTable));
-        navigate("/book");
-      }
+      navigate("/book");
     }
-    setSelectedTable(null);
+
+    setInternalSelectedTable(null);
   };
 
-  const renderTable = (table: Table) => {
+  const renderTable = (table: FloorPlanTable) => {
     const isHovered = hoveredTable === table.id;
     const isSelected = selectedTable?.id === table.id;
     const isClickable = table.status !== "occupied";
-
-    const commonProps = {
-      className: `transition-all duration-200 ${isClickable ? "cursor-pointer" : "cursor-not-allowed"}`,
-      style: {
-        filter: isSelected ? "drop-shadow(0 0 8px rgba(var(--primary), 0.5))" : undefined,
-        transform: isHovered && isClickable ? "scale(1.05)" : undefined,
-        transformOrigin: "center",
-      },
-      onClick: () => handleTableClick(table),
-      onMouseEnter: () => setHoveredTable(table.id),
-      onMouseLeave: () => setHoveredTable(null),
-    };
 
     const fill = getStatusBg(table.status, isHovered && isClickable);
     const stroke = getStatusColor(table.status, isHovered && isClickable);
     const strokeWidth = isSelected ? 3 : 2;
 
+    const groupProps = {
+      key: table.id,
+      className: isClickable ? "cursor-pointer" : "cursor-not-allowed",
+      onClick: () => handleTableClick(table),
+      onMouseEnter: () => setHoveredTable(table.id),
+      onMouseLeave: () => setHoveredTable(null),
+      style: {
+        transition: "all 0.2s ease",
+        transform: isHovered && isClickable ? "scale(1.04)" : "scale(1)",
+        transformOrigin: "center",
+      } as React.CSSProperties,
+    };
+
     if (table.shape === "circle") {
       return (
-        <g key={table.id} {...commonProps}>
+        <g {...groupProps}>
           <circle
             cx={table.x + table.width / 2}
             cy={table.y + table.height / 2}
@@ -129,21 +171,22 @@ export default function CafeFloorPlan({ onTableSelect }: CafeFloorPlanProps) {
             stroke={stroke}
             strokeWidth={strokeWidth}
           />
-          {/* Table number */}
           <text
             x={table.x + table.width / 2}
-            y={table.y + table.height / 2 - 5}
+            y={table.y + table.height / 2 - 4}
             textAnchor="middle"
-            className="text-xs font-bold fill-foreground"
+            fontSize="16"
+            fontWeight="700"
+            fill="#1f2937"
           >
             {table.name}
           </text>
-          {/* Seats indicator */}
           <text
             x={table.x + table.width / 2}
-            y={table.y + table.height / 2 + 12}
+            y={table.y + table.height / 2 + 16}
             textAnchor="middle"
-            className="text-[10px] fill-muted-foreground"
+            fontSize="12"
+            fill="#6b7280"
           >
             {table.seats}p
           </text>
@@ -153,7 +196,7 @@ export default function CafeFloorPlan({ onTableSelect }: CafeFloorPlanProps) {
 
     if (table.shape === "oval") {
       return (
-        <g key={table.id} {...commonProps}>
+        <g {...groupProps}>
           <ellipse
             cx={table.x + table.width / 2}
             cy={table.y + table.height / 2}
@@ -165,17 +208,20 @@ export default function CafeFloorPlan({ onTableSelect }: CafeFloorPlanProps) {
           />
           <text
             x={table.x + table.width / 2}
-            y={table.y + table.height / 2 - 5}
+            y={table.y + table.height / 2 - 4}
             textAnchor="middle"
-            className="text-xs font-bold fill-foreground"
+            fontSize="16"
+            fontWeight="700"
+            fill="#1f2937"
           >
             {table.name}
           </text>
           <text
             x={table.x + table.width / 2}
-            y={table.y + table.height / 2 + 12}
+            y={table.y + table.height / 2 + 16}
             textAnchor="middle"
-            className="text-[10px] fill-muted-foreground"
+            fontSize="12"
+            fill="#6b7280"
           >
             {table.seats}p
           </text>
@@ -183,32 +229,34 @@ export default function CafeFloorPlan({ onTableSelect }: CafeFloorPlanProps) {
       );
     }
 
-    // Rectangle
     return (
-      <g key={table.id} {...commonProps}>
+      <g {...groupProps}>
         <rect
           x={table.x}
           y={table.y}
           width={table.width}
           height={table.height}
-          rx={8}
+          rx={10}
           fill={fill}
           stroke={stroke}
           strokeWidth={strokeWidth}
         />
         <text
           x={table.x + table.width / 2}
-          y={table.y + table.height / 2 - 5}
+          y={table.y + table.height / 2 - 4}
           textAnchor="middle"
-          className="text-xs font-bold fill-foreground"
+          fontSize="16"
+          fontWeight="700"
+          fill="#1f2937"
         >
           {table.name}
         </text>
         <text
           x={table.x + table.width / 2}
-          y={table.y + table.height / 2 + 12}
+          y={table.y + table.height / 2 + 16}
           textAnchor="middle"
-          className="text-[10px] fill-muted-foreground"
+          fontSize="12"
+          fill="#6b7280"
         >
           {table.seats}p
         </text>
@@ -218,170 +266,195 @@ export default function CafeFloorPlan({ onTableSelect }: CafeFloorPlanProps) {
 
   return (
     <div className="relative">
-      {/* Floor Plan */}
-      <div className="bg-card rounded-2xl border border-border p-4 overflow-auto">
+      <div className="rounded-2xl border border-border bg-card p-2 sm:p-4 overflow-x-auto">
         <svg
-          viewBox="0 0 680 600"
-          className="w-full max-w-3xl mx-auto"
-          style={{ minHeight: "400px" }}
+          viewBox="0 0 700 620"
+          preserveAspectRatio="xMidYMid meet"
+          className="mx-auto w-full h-auto"
+          style={{ minHeight: "300px", maxHeight: "80vh" }}
         >
-          {/* Background */}
-          <rect x="0" y="0" width="680" height="600" fill="transparent" />
-
-          {/* Floor areas */}
-          {/* Main indoor area */}
+          {/* Main floor */}
           <rect
-            x="10"
-            y="10"
-            width="650"
-            height="440"
+            x="18"
+            y="18"
+            width="664"
+            height="582"
+            rx="18"
+            fill="#f8f6f2"
+            stroke="#d8d1c7"
+            strokeWidth="1.5"
+          />
+
+          {/* Indoor area */}
+          <rect
+            x="60"
+            y="40"
+            width="580"
+            height="420"
             rx="16"
-            className="fill-muted/30 stroke-border"
+            fill="#f4f1eb"
+            stroke="#cfc6b8"
             strokeWidth="2"
           />
 
-          {/* Outdoor patio area */}
+          {/* Outdoor area */}
           <rect
-            x="80"
-            y="470"
-            width="420"
-            height="120"
-            rx="12"
-            className="fill-green-500/10 stroke-green-500/30"
+            x="120"
+            y="485"
+            width="400"
+            height="110"
+            rx="14"
+            fill="#ecfdf3"
+            stroke="#86efac"
             strokeWidth="2"
-            strokeDasharray="8 4"
+            strokeDasharray="8 6"
           />
-          <text x="290" y="575" textAnchor="middle" className="text-xs fill-green-600 font-medium">
-            Outdoor Patio
+
+          {/* Counter */}
+          <rect
+            x="550"
+            y="100"
+            width="80"
+            height="50"
+            rx="8"
+            fill="#fff3d6"
+            stroke="#f59e0b"
+            strokeWidth="2"
+          />
+          <text x="590" y="130" textAnchor="middle" fontSize="12" fontWeight="700" fill="#b45309">
+            Counter
           </text>
 
-          {/* Counter/Bar area */}
-          <rect
-            x="520"
-            y="440"
-            width="140"
-            height="10"
-            rx="2"
-            className="fill-primary/20 stroke-primary/40"
-            strokeWidth="1"
-          />
-
-          {/* Coffee counter */}
-          <g>
-            <rect
-              x="560"
-              y="10"
-              width="100"
-              height="50"
-              rx="8"
-              className="fill-amber-500/20 stroke-amber-500/50"
-              strokeWidth="2"
-            />
-            <Coffee className="text-amber-600" x="595" y="20" width="30" height="30" />
-            <text x="610" y="50" textAnchor="middle" className="text-[10px] fill-amber-700 font-medium">
-              Counter
-            </text>
-          </g>
-
           {/* Entrance */}
-          <g>
-            <rect
-              x="10"
-              y="430"
-              width="60"
-              height="20"
-              rx="4"
-              className="fill-blue-500/20 stroke-blue-500/50"
-              strokeWidth="2"
-            />
-            <text x="40" y="445" textAnchor="middle" className="text-[10px] fill-blue-600 font-medium">
-              Entry
-            </text>
-          </g>
+          <rect
+            x="60"
+            y="438"
+            width="56"
+            height="20"
+            rx="4"
+            fill="#dbeafe"
+            stroke="#60a5fa"
+            strokeWidth="1.5"
+          />
+          <text x="88" y="452" textAnchor="middle" fontSize="11" fontWeight="600" fill="#2563eb">
+            Entry
+          </text>
 
-          {/* Window indication (left wall) */}
-          <line x1="10" y1="60" x2="10" y2="420" className="stroke-sky-400" strokeWidth="4" />
-          <text x="20" y="240" className="text-[10px] fill-sky-500 font-medium" transform="rotate(-90, 20, 240)">
+          {/* Window line */}
+          <line x1="60" y1="85" x2="60" y2="428" stroke="#38bdf8" strokeWidth="4" />
+          <text
+            x="72"
+            y="255"
+            transform="rotate(-90, 72, 255)"
+            fontSize="11"
+            fontWeight="600"
+            fill="#0ea5e9"
+          >
             Window View
           </text>
 
-          {/* Section labels */}
-          <text x="70" y="55" className="text-[11px] fill-muted-foreground font-medium">
-            Window Section
+          {/* Labels */}
+          <text x="85" y="70" fontSize="12" fontWeight="500" fill="#8b6f47">
+            Window
           </text>
-          <text x="260" y="55" className="text-[11px] fill-muted-foreground font-medium">
+          <text x="270" y="70" fontSize="12" fontWeight="500" fill="#8b6f47">
             Main Dining
           </text>
-          <text x="530" y="55" className="text-[11px] fill-muted-foreground font-medium">
+          <text x="540" y="70" fontSize="12" fontWeight="500" fill="#8b6f47">
             Group Area
           </text>
+          <text x="320" y="580" textAnchor="middle" fontSize="14" fontWeight="500" fill="#16a34a">
+            Outdoor Patio
+          </text>
 
-          {/* Render all tables */}
-          {tables.map(renderTable)}
+          {/* Decorative plants */}
+          <circle cx="150" cy="445" r="12" fill="#bbf7d0" stroke="#86efac" />
+          <circle cx="500" cy="445" r="12" fill="#bbf7d0" stroke="#86efac" />
 
-          {/* Decorative elements */}
-          {/* Plants */}
-          <circle cx="130" y="430" r="15" className="fill-green-500/30 stroke-green-600/50" strokeWidth="1" />
-          <circle cx="480" y="430" r="15" className="fill-green-500/30 stroke-green-600/50" strokeWidth="1" />
+          {/* Tables */}
+          {tablesWithStatus.map(renderTable)}
         </svg>
       </div>
 
       {/* Legend */}
-      <div className="flex flex-wrap justify-center gap-4 mt-4 text-xs">
-        <div className="flex items-center gap-1.5">
-          <div className="w-4 h-4 rounded-full bg-green-500/20 border-2 border-green-500" />
+      <div className="mt-3 sm:mt-4 flex flex-wrap justify-center gap-3 sm:gap-5 text-[10px] sm:text-xs">
+        <div className="flex items-center gap-1.5 sm:gap-2">
+          <div className="h-3 w-3 sm:h-4 sm:w-4 rounded-full border-2 border-green-500 bg-green-500/20" />
           <span className="text-muted-foreground">Available</span>
         </div>
-        <div className="flex items-center gap-1.5">
-          <div className="w-4 h-4 rounded-full bg-red-500/20 border-2 border-red-500" />
+        <div className="flex items-center gap-1.5 sm:gap-2">
+          <div className="h-3 w-3 sm:h-4 sm:w-4 rounded-full border-2 border-red-500 bg-red-500/20" />
           <span className="text-muted-foreground">Occupied</span>
         </div>
-        <div className="flex items-center gap-1.5">
-          <div className="w-4 h-4 rounded-full bg-amber-500/20 border-2 border-amber-500" />
+        <div className="flex items-center gap-1.5 sm:gap-2">
+          <div className="h-3 w-3 sm:h-4 sm:w-4 rounded-full border-2 border-amber-500 bg-amber-500/20" />
           <span className="text-muted-foreground">Reserved</span>
         </div>
       </div>
 
-      {/* Table Action Modal */}
-      {selectedTable && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="bg-card rounded-2xl border border-border shadow-xl max-w-sm w-full p-6 animate-in fade-in zoom-in duration-200">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold" style={{ fontFamily: "'DM Serif Display', serif" }}>
-                Table {selectedTable.name}
+      {/* Mobile hint */}
+      <p className="mt-2 text-center text-[10px] sm:text-xs text-muted-foreground">
+        Tap on any available table to select it
+      </p>
+
+      {/* Modal - only show if showModal is true and using internal selection */}
+      {showModal && internalSelectedTable && !onTableSelect && (
+        <div
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-0 sm:p-4"
+          onClick={() => setInternalSelectedTable(null)}
+        >
+          <div
+            className="w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl border border-border bg-card p-5 sm:p-6 shadow-xl animate-in slide-in-from-bottom sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Drag handle for mobile */}
+            <div className="sm:hidden flex justify-center mb-3">
+              <div className="w-10 h-1 rounded-full bg-muted-foreground/30" />
+            </div>
+
+            <div className="mb-4 flex items-center justify-between">
+              <h3
+                className="text-lg font-bold"
+                style={{ fontFamily: "'DM Serif Display', serif" }}
+              >
+                Table {internalSelectedTable.name}
               </h3>
               <button
-                onClick={() => setSelectedTable(null)}
-                className="p-1 rounded-full hover:bg-muted transition-colors"
+                onClick={() => setInternalSelectedTable(null)}
+                className="rounded-full p-2 hover:bg-muted active:bg-muted transition-colors"
               >
                 <X className="h-5 w-5 text-muted-foreground" />
               </button>
             </div>
 
-            <div className="space-y-3 mb-6">
+            <div className="mb-5 sm:mb-6 space-y-2.5 sm:space-y-3">
               <div className="flex items-center gap-2 text-sm">
                 <Users className="h-4 w-4 text-primary" />
-                <span>{selectedTable.seats} seats</span>
+                <span>{internalSelectedTable.seats} seats</span>
               </div>
               <div className="flex items-center gap-2 text-sm">
                 <Sofa className="h-4 w-4 text-primary" />
-                <span className="capitalize">{selectedTable.section} section</span>
+                <span className="capitalize">{internalSelectedTable.section} section</span>
               </div>
               <div className="flex items-center gap-2 text-sm">
                 <div
-                  className={`w-3 h-3 rounded-full ${
-                    selectedTable.status === "available" ? "bg-green-500" : "bg-amber-500"
+                  className={`h-3 w-3 rounded-full ${
+                    internalSelectedTable.status === "available"
+                      ? "bg-green-500"
+                      : internalSelectedTable.status === "occupied"
+                      ? "bg-red-500"
+                      : "bg-amber-500"
                   }`}
                 />
-                <span className="capitalize">{selectedTable.status}</span>
+                <span className="capitalize">{internalSelectedTable.status}</span>
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <Button
                 onClick={() => handleAction("order")}
-                className="flex items-center justify-center gap-2 text-xs font-bold uppercase tracking-wider"
-                disabled={selectedTable.status === "reserved"}
+                disabled={internalSelectedTable.status === "reserved"}
+                className="flex items-center justify-center gap-2 text-xs font-bold uppercase tracking-wider h-11 sm:h-10"
               >
                 <ShoppingBag className="h-4 w-4" />
                 Order Now
@@ -389,15 +462,15 @@ export default function CafeFloorPlan({ onTableSelect }: CafeFloorPlanProps) {
               <Button
                 onClick={() => handleAction("book")}
                 variant="outline"
-                className="flex items-center justify-center gap-2 text-xs font-bold uppercase tracking-wider"
+                className="flex items-center justify-center gap-2 text-xs font-bold uppercase tracking-wider h-11 sm:h-10"
               >
                 <CalendarDays className="h-4 w-4" />
                 Book Table
               </Button>
             </div>
 
-            {selectedTable.status === "reserved" && (
-              <p className="text-xs text-amber-600 text-center mt-3">
+            {internalSelectedTable.status === "reserved" && (
+              <p className="mt-3 text-center text-xs text-amber-600">
                 This table is reserved. You can still book it for another time.
               </p>
             )}

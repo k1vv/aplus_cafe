@@ -1,5 +1,4 @@
-import { ShoppingCart, Truck, User, LogOut, Package, CalendarDays, Settings, UserCircle, Shield, LayoutGrid } from "lucide-react";
-import { useCart } from "@/context/CartContext";
+import { Truck, User, LogOut, Package, CalendarDays, Settings, UserCircle, Shield } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { Link } from "react-router-dom";
 import {
@@ -12,7 +11,6 @@ import {
 import ThemeToggle from "@/components/ThemeToggle";
 
 export default function Header() {
-  const { totalItems, setIsCartOpen, cartBadgeKey } = useCart();
   const { user, logout } = useAuth();
 
   // Check if user has admin role
@@ -22,10 +20,6 @@ export default function Header() {
     <header className="sticky top-0 z-50 bg-primary text-primary-foreground">
       <div className="flex items-center justify-between px-3 py-3 sm:px-6 sm:py-4 md:px-10">
         <div className="flex items-center gap-2 sm:gap-4 md:gap-6">
-          <Link to="/cafe" className="flex items-center gap-1 sm:gap-1.5 text-[10px] sm:text-xs font-medium uppercase tracking-[0.1em] sm:tracking-[0.2em] hover:opacity-70 transition-opacity">
-            <LayoutGrid className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-            <span className="hidden sm:inline">Tables</span>
-          </Link>
           <Link to="/book" className="flex items-center gap-1 sm:gap-1.5 text-[10px] sm:text-xs font-medium uppercase tracking-[0.1em] sm:tracking-[0.2em] hover:opacity-70 transition-opacity">
             <CalendarDays className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
             <span className="hidden xs:inline sm:hidden">Book</span>
@@ -91,20 +85,6 @@ export default function Header() {
             </Link>
           )}
           <ThemeToggle className="text-primary-foreground hover:text-primary-foreground/70" />
-          <button
-            onClick={() => setIsCartOpen(true)}
-            className="flex items-center gap-1.5 sm:gap-2 text-[10px] sm:text-xs font-medium uppercase tracking-[0.1em] sm:tracking-[0.2em] hover:opacity-70 transition-opacity relative"
-          >
-            <ShoppingCart className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-            {totalItems > 0 && (
-              <span
-                key={cartBadgeKey}
-                className="flex h-4 w-4 sm:h-5 sm:w-5 items-center justify-center rounded-full bg-primary-foreground text-primary text-[9px] sm:text-[10px] font-bold cart-badge-bounce"
-              >
-                {totalItems}
-              </span>
-            )}
-          </button>
         </div>
       </div>
     </header>

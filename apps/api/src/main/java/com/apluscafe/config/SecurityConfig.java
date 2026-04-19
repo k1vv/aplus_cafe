@@ -61,6 +61,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/announcements/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/tables/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/reservation-slots/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/cafe/**").permitAll()
                         .requestMatchers("/api/webhook/**").permitAll()
                         .requestMatchers("/api/checkout/create-session").permitAll()
                         .requestMatchers("/api/checkout/confirm").permitAll()

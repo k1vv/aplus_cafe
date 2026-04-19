@@ -8,12 +8,16 @@ import com.apluscafe.dto.response.ReviewResponse;
 import com.apluscafe.dto.response.ReviewStatsResponse;
 import com.apluscafe.dto.response.UserResponse;
 import com.apluscafe.entity.Announcement;
+import com.apluscafe.entity.ClosedDate;
+import com.apluscafe.entity.RecurringClosure;
 import com.apluscafe.entity.RiderDetails;
 import com.apluscafe.entity.User;
 import com.apluscafe.enums.OrderStatus;
 import com.apluscafe.enums.ReservationStatus;
+import com.apluscafe.enums.UserRole;
 import com.apluscafe.repository.RiderDetailsRepository;
 import com.apluscafe.repository.UserRepository;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import com.apluscafe.security.UserDetailsImpl;
 import com.apluscafe.service.AnalyticsService;
 import com.apluscafe.service.AnnouncementService;
@@ -22,6 +26,7 @@ import com.apluscafe.service.MenuService;
 import com.apluscafe.service.OrderService;
 import com.apluscafe.service.ReservationService;
 import com.apluscafe.service.ReviewService;
+import com.apluscafe.service.ScheduleService;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -51,6 +56,8 @@ public class AdminController {
     private final ReviewService reviewService;
     private final RiderDetailsRepository riderDetailsRepository;
     private final DeliveryService deliveryService;
+    private final PasswordEncoder passwordEncoder;
+    private final ScheduleService scheduleService;
 
     // Analytics
     @GetMapping("/analytics")
@@ -139,6 +146,40 @@ public class AdminController {
         return ResponseEntity.ok().build();
     }
 
+    @PostMapping("/riders")
+    public ResponseEntity<UserResponse> createRider(@RequestBody CreateRiderRequest request) {
+        // Check if email already exists
+        if (userRepository.existsByEmail(request.getEmail())) {
+            throw new RuntimeException("Email already exists");
+        }
+
+        // Create user with RIDER role
+        User user = User.builder()
+                .email(request.getEmail())
+                .passwordHash(passwordEncoder.encode(request.getPassword()))
+                .fullName(request.getFullName())
+                .phone(request.getPhone())
+                .role(UserRole.RIDER)
+                .isActive(true)
+                .emailVerified(true) // Riders created by admin are auto-verified
+                .twoFactorEnabled(false)
+                .build();
+        user = userRepository.save(user);
+
+        // Create rider details
+        RiderDetails riderDetails = RiderDetails.builder()
+                .user(user)
+                .vehicleType(request.getVehicleType())
+                .licensePlate(request.getLicensePlate())
+                .isAvailable(true)
+                .rating(5.0)
+                .totalDeliveries(0)
+                .build();
+        riderDetailsRepository.save(riderDetails);
+
+        return ResponseEntity.ok(UserResponse.fromEntity(user));
+    }
+
     // Reservation Management
     @GetMapping("/reservations")
     public ResponseEntity<List<ReservationResponse>> getReservationsForDate(
@@ -162,13 +203,21 @@ public class AdminController {
                 .collect(Collectors.toList()));
     }
 
-    @PatchMapping("/users/{id}/active")
-    public ResponseEntity<UserResponse> toggleUserActive(@PathVariable Long id) {
+    @DeleteMapping("/users/{id}")
+    public ResponseEntity<Void> deleteUser(@PathVariable Long id) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("User not found"));
-        user.setIsActive(!user.getIsActive());
-        user = userRepository.save(user);
-        return ResponseEntity.ok(UserResponse.fromEntity(user));
+
+        // Don't allow deleting admin users
+        if (user.getRole() == UserRole.ADMIN) {
+            throw new RuntimeException("Cannot delete admin users");
+        }
+
+        // Delete rider details if exists
+        riderDetailsRepository.findByUserId(id).ifPresent(riderDetailsRepository::delete);
+
+        userRepository.delete(user);
+        return ResponseEntity.ok().build();
     }
 
     // Announcement Management
@@ -228,6 +277,51 @@ public class AdminController {
             @PathVariable Long id,
             @RequestBody ReviewResponseRequest request) {
         return ResponseEntity.ok(reviewService.respondToReview(id, request.getResponse()));
+    }
+
+    // ==================== Schedule Management ====================
+
+    // Closed Dates
+    @GetMapping("/closed-dates")
+    public ResponseEntity<List<ClosedDate>> getClosedDates(
+            @RequestParam(required = false) String month) {
+        if (month != null) {
+            return ResponseEntity.ok(scheduleService.getClosedDatesForMonth(month));
+        }
+        return ResponseEntity.ok(scheduleService.getUpcomingClosedDates());
+    }
+
+    @PostMapping("/closed-dates")
+    public ResponseEntity<ClosedDate> addClosedDate(@RequestBody AddClosedDateRequest request) {
+        return ResponseEntity.ok(scheduleService.addClosedDate(request.getDate(), request.getReason()));
+    }
+
+    @DeleteMapping("/closed-dates/{id}")
+    public ResponseEntity<Void> deleteClosedDate(@PathVariable Long id) {
+        scheduleService.deleteClosedDate(id);
+        return ResponseEntity.ok().build();
+    }
+
+    // Recurring Closures
+    @GetMapping("/recurring-closures")
+    public ResponseEntity<List<RecurringClosure>> getRecurringClosures() {
+        return ResponseEntity.ok(scheduleService.getAllRecurringClosures());
+    }
+
+    @PostMapping("/recurring-closures")
+    public ResponseEntity<RecurringClosure> addRecurringClosure(@RequestBody AddRecurringClosureRequest request) {
+        return ResponseEntity.ok(scheduleService.addRecurringClosure(request.getDayOfWeek(), request.getReason()));
+    }
+
+    @DeleteMapping("/recurring-closures/{id}")
+    public ResponseEntity<Void> deleteRecurringClosure(@PathVariable Long id) {
+        scheduleService.deleteRecurringClosure(id);
+        return ResponseEntity.ok().build();
+    }
+
+    @PatchMapping("/recurring-closures/{id}/toggle")
+    public ResponseEntity<RecurringClosure> toggleRecurringClosure(@PathVariable Long id) {
+        return ResponseEntity.ok(scheduleService.toggleRecurringClosure(id));
     }
 
     // Request DTOs
@@ -291,6 +385,16 @@ public class AdminController {
     }
 
     @Data
+    static class CreateRiderRequest {
+        private String email;
+        private String password;
+        private String fullName;
+        private String phone;
+        private String vehicleType;
+        private String licensePlate;
+    }
+
+    @Data
     @lombok.AllArgsConstructor
     static class RiderResponse {
         private Long id;
@@ -299,5 +403,17 @@ public class AdminController {
         private String licensePlate;
         private Boolean isAvailable;
         private Double rating;
+    }
+
+    @Data
+    static class AddClosedDateRequest {
+        private LocalDate date;
+        private String reason;
+    }
+
+    @Data
+    static class AddRecurringClosureRequest {
+        private Integer dayOfWeek;
+        private String reason;
     }
 }

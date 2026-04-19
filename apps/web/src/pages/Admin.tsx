@@ -1,28 +1,40 @@
-import { useState, useEffect } from "react";
+import { useState, useRef, useEffect } from "react";
+import { toast } from "sonner";
 import { Link, Routes, Route, useLocation } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/context/AuthContext";
 import {
   ArrowLeft, LayoutDashboard, UtensilsCrossed, Package, CalendarDays, Users,
   Plus, Edit2, Trash2, Check, X, ChevronDown, RefreshCw, TrendingUp, Clock, Truck, DollarSign,
-  Star, MessageSquare, Megaphone, Send, LogOut
+  Star, MessageSquare, Megaphone, Send, LogOut, Upload, ImageIcon, Calendar
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  adminApi, menuApi, MenuItemResponse, Order, Reservation, AdminUser,
+  MenuItemResponse, Order, Reservation, AdminUser,
   CategoryResponse, CreateMenuItemRequest, AnalyticsResponse, Review, ReviewStats,
-  Announcement, adminReviewsApi, adminAnnouncementsApi, Rider
+  Announcement, Rider, ClosedDate, RecurringClosure, adminApi
 } from "@/lib/api";
-import { toast } from "sonner";
 import { format } from "date-fns";
 import LoadingOverlay from "@/components/LoadingOverlay";
+import {
+  useAnalytics,
+  useAdminOrders, useUpdateOrderStatus, useAssignRider, useUnassignRider, useRiders,
+  useAdminMenu, useCreateMenuItem, useUpdateMenuItem, useDeleteMenuItem,
+  useAdminReservations, useUpdateReservationStatus,
+  useAdminUsers, useCreateRider, useDeleteUser,
+  useAdminReviews, useRespondToReview,
+  useAdminAnnouncements, useCreateAnnouncement, useUpdateAnnouncement, useDeleteAnnouncement,
+} from "@/hooks/useAdminData";
+import { imageApi } from "@/lib/api";
 
 const navItems = [
   { path: "/admin", label: "Dashboard", icon: LayoutDashboard },
   { path: "/admin/menu", label: "Menu", icon: UtensilsCrossed },
   { path: "/admin/orders", label: "Orders", icon: Package },
   { path: "/admin/reservations", label: "Reservations", icon: CalendarDays },
+  { path: "/admin/schedule", label: "Schedule", icon: Calendar },
   { path: "/admin/users", label: "Users", icon: Users },
   { path: "/admin/reviews", label: "Reviews", icon: Star },
   { path: "/admin/announcements", label: "Announcements", icon: Megaphone },
@@ -56,17 +68,7 @@ function AdminNav() {
 }
 
 function DashboardOverview() {
-  const [analytics, setAnalytics] = useState<AnalyticsResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const fetchAnalytics = async () => {
-      const { data } = await adminApi.getAnalytics();
-      if (data) setAnalytics(data);
-      setLoading(false);
-    };
-    fetchAnalytics();
-  }, []);
+  const { data: analytics, isLoading: loading } = useAnalytics();
 
   if (loading) {
     return (
@@ -217,11 +219,21 @@ function DashboardOverview() {
 }
 
 function MenuManagement() {
-  const [items, setItems] = useState<MenuItemResponse[]>([]);
-  const [categories, setCategories] = useState<CategoryResponse[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: menuData, isLoading: loading } = useAdminMenu();
+  const createMutation = useCreateMenuItem();
+  const updateMutation = useUpdateMenuItem();
+  const deleteMutation = useDeleteMenuItem();
+
+  const items = menuData?.items || [];
+  const categories = menuData?.categories || [];
+
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [dragActive, setDragActive] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string>("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [formData, setFormData] = useState<CreateMenuItemRequest>({
     categoryId: 1,
     name: "",
@@ -231,49 +243,86 @@ function MenuManagement() {
     isAvailable: true,
   });
 
-  useEffect(() => {
-    fetchData();
-  }, []);
+  const handleFileSelect = (file: File) => {
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please select an image file");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Image must be less than 5MB");
+      return;
+    }
+    setSelectedFile(file);
+    const url = URL.createObjectURL(file);
+    setPreviewUrl(url);
+  };
 
-  const fetchData = async () => {
-    setLoading(true);
-    const [menuRes, catRes] = await Promise.all([
-      menuApi.getMenuItems(),
-      menuApi.getCategories(),
-    ]);
-    if (menuRes.data) setItems(menuRes.data);
-    if (catRes.data) setCategories(catRes.data);
-    setLoading(false);
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragActive(false);
+    const file = e.dataTransfer.files[0];
+    if (file) {
+      handleFileSelect(file);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragActive(true);
+  };
+
+  const handleDragLeave = () => {
+    setDragActive(false);
+  };
+
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      handleFileSelect(file);
+    }
   };
 
   const handleSubmit = async () => {
-    if (editingId) {
-      const { error } = await adminApi.updateMenuItem(editingId, formData);
+    setUploading(true);
+
+    let finalImageUrl = formData.imageUrl;
+
+    // Upload image if a new file was selected
+    if (selectedFile) {
+      const { data, error } = await imageApi.upload(selectedFile);
       if (error) {
-        toast.error("Failed to update item");
+        toast.error(error);
+        setUploading(false);
         return;
       }
-      toast.success("Item updated");
-    } else {
-      const { error } = await adminApi.createMenuItem(formData);
-      if (error) {
-        toast.error("Failed to create item");
-        return;
+      if (data?.url) {
+        finalImageUrl = data.url;
       }
-      toast.success("Item created");
     }
-    resetForm();
-    fetchData();
+
+    const submitData = { ...formData, imageUrl: finalImageUrl };
+
+    if (editingId) {
+      updateMutation.mutate({ id: editingId, data: submitData }, {
+        onSuccess: () => {
+          resetForm();
+          setUploading(false);
+        },
+        onError: () => setUploading(false),
+      });
+    } else {
+      createMutation.mutate(submitData, {
+        onSuccess: () => {
+          resetForm();
+          setUploading(false);
+        },
+        onError: () => setUploading(false),
+      });
+    }
   };
 
   const handleDelete = async (id: number) => {
-    const { error } = await adminApi.deleteMenuItem(id);
-    if (error) {
-      toast.error("Failed to delete item");
-      return;
-    }
-    toast.success("Item deleted");
-    fetchData();
+    deleteMutation.mutate(id);
   };
 
   const handleEdit = (item: MenuItemResponse) => {
@@ -292,6 +341,9 @@ function MenuManagement() {
   const resetForm = () => {
     setShowForm(false);
     setEditingId(null);
+    setSelectedFile(null);
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setPreviewUrl("");
     setFormData({ categoryId: 1, name: "", description: "", price: 0, imageUrl: "", isAvailable: true });
   };
 
@@ -321,14 +373,50 @@ function MenuManagement() {
               ))}
             </select>
           </div>
-          <Input placeholder="Image URL" value={formData.imageUrl} onChange={(e) => setFormData({ ...formData, imageUrl: e.target.value })} maxLength={500} />
+
+          {/* Image Upload Area */}
+          <div
+            className={`relative border-2 border-dashed rounded-lg p-4 transition-colors cursor-pointer ${
+              dragActive ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"
+            }`}
+            onDrop={handleDrop}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleFileInputChange}
+            />
+            {previewUrl || formData.imageUrl ? (
+              <div className="flex items-center gap-3">
+                <img src={previewUrl || formData.imageUrl} alt="Preview" className="h-16 w-16 rounded-lg object-cover" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-muted-foreground truncate">
+                    {selectedFile ? selectedFile.name : formData.imageUrl}
+                  </p>
+                  <p className="text-xs text-primary">Click or drag to replace</p>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-4">
+                <ImageIcon className="h-8 w-8 text-muted-foreground mb-2" />
+                <p className="text-sm text-muted-foreground">Drag & drop an image or click to browse</p>
+                <p className="text-xs text-muted-foreground mt-1">PNG, JPG, WebP up to 5MB</p>
+              </div>
+            )}
+          </div>
+
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" checked={formData.isAvailable} onChange={(e) => setFormData({ ...formData, isAvailable: e.target.checked })} />
             Available
           </label>
           <div className="flex gap-2 justify-end">
             <Button variant="outline" size="sm" onClick={resetForm}>Cancel</Button>
-            <Button size="sm" onClick={handleSubmit}>{editingId ? "Update" : "Create"}</Button>
+            <Button size="sm" onClick={handleSubmit} disabled={uploading}>{editingId ? "Update" : "Create"}</Button>
           </div>
         </div>
       )}
@@ -364,53 +452,23 @@ function MenuManagement() {
 }
 
 function OrdersManagement() {
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+  const { data: orders = [], isLoading: loading } = useAdminOrders();
+  const { data: riders = [] } = useRiders();
+  const updateStatusMutation = useUpdateOrderStatus();
+  const assignRiderMutation = useAssignRider();
+  const unassignRiderMutation = useUnassignRider();
+
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
   const [cancelModalOrder, setCancelModalOrder] = useState<Order | null>(null);
   const [cancellationReason, setCancellationReason] = useState("");
-  const [riders, setRiders] = useState<Rider[]>([]);
-  const [assigningRider, setAssigningRider] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetchOrders();
-    fetchRiders();
-  }, []);
-
-  const fetchOrders = async () => {
-    setLoading(true);
-    const { data } = await adminApi.getAllOrders();
-    if (data) setOrders(data);
-    setLoading(false);
-  };
-
-  const fetchRiders = async () => {
-    const { data } = await adminApi.getRiders();
-    if (data) setRiders(data);
-  };
 
   const handleAssignRider = async (orderId: string, riderId: number) => {
-    setAssigningRider(orderId);
-    const { error } = await adminApi.assignRider(orderId, riderId);
-    setAssigningRider(null);
-    if (error) {
-      toast.error("Failed to assign rider");
-      return;
-    }
-    toast.success("Rider assigned");
-    fetchOrders();
+    assignRiderMutation.mutate({ orderId, riderId });
   };
 
   const handleUnassignRider = async (orderId: string) => {
-    setAssigningRider(orderId);
-    const { error } = await adminApi.unassignRider(orderId);
-    setAssigningRider(null);
-    if (error) {
-      toast.error("Failed to unassign rider");
-      return;
-    }
-    toast.success("Rider unassigned");
-    fetchOrders();
+    unassignRiderMutation.mutate(orderId);
   };
 
   const handleStatusUpdate = async (id: string, status: string, e: React.MouseEvent, reason?: string) => {
@@ -425,34 +483,27 @@ function OrdersManagement() {
       }
     }
 
-    const { error } = await adminApi.updateOrderStatus(id, status, reason);
-    if (error) {
-      toast.error("Failed to update status");
-      return;
-    }
-    toast.success("Status updated");
-    fetchOrders();
+    updateStatusMutation.mutate({ id, status, reason });
   };
 
   const handleCancelConfirm = async () => {
     if (!cancelModalOrder || !cancellationReason.trim()) {
-      toast.error("Please enter a cancellation reason");
       return;
     }
 
-    const { error } = await adminApi.updateOrderStatus(
-      cancelModalOrder.id,
-      'CANCELLED',
-      cancellationReason.trim()
+    updateStatusMutation.mutate(
+      { id: cancelModalOrder.id, status: 'CANCELLED', reason: cancellationReason.trim() },
+      {
+        onSuccess: () => {
+          setCancelModalOrder(null);
+          setCancellationReason("");
+        },
+      }
     );
-    if (error) {
-      toast.error("Failed to cancel order");
-      return;
-    }
-    toast.success("Order cancelled");
-    setCancelModalOrder(null);
-    setCancellationReason("");
-    fetchOrders();
+  };
+
+  const refreshOrders = () => {
+    queryClient.invalidateQueries({ queryKey: ["admin", "orders"] });
   };
 
   // Status progression order (without CANCELLED - that's handled separately)
@@ -494,7 +545,7 @@ function OrdersManagement() {
     <div>
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-xl" style={{ fontFamily: "'DM Serif Display', serif" }}>Orders Management</h2>
-        <Button variant="outline" size="sm" onClick={fetchOrders}>
+        <Button variant="outline" size="sm" onClick={refreshOrders}>
           <RefreshCw className="h-3.5 w-3.5 mr-1" /> Refresh
         </Button>
       </div>
@@ -633,9 +684,9 @@ function OrdersManagement() {
                                   variant="outline"
                                   size="sm"
                                   onClick={() => handleUnassignRider(order.id)}
-                                  disabled={assigningRider === order.id}
+                                  disabled={assignRiderMutation.isPending || unassignRiderMutation.isPending}
                                 >
-                                  {assigningRider === order.id ? (
+                                  {unassignRiderMutation.isPending ? (
                                     <span className="h-3 w-3 border-2 border-foreground border-t-transparent rounded-full animate-spin" />
                                   ) : (
                                     'Unassign'
@@ -654,7 +705,7 @@ function OrdersManagement() {
                                     handleAssignRider(order.id, parseInt(e.target.value));
                                   }
                                 }}
-                                disabled={assigningRider === order.id}
+                                disabled={assignRiderMutation.isPending || unassignRiderMutation.isPending}
                               >
                                 <option value="">Select a rider...</option>
                                 {riders.filter(r => r.isAvailable).map(rider => (
@@ -850,29 +901,12 @@ function OrdersManagement() {
 }
 
 function ReservationsManagement() {
-  const [reservations, setReservations] = useState<Reservation[]>([]);
-  const [loading, setLoading] = useState(true);
   const [dateFilter, setDateFilter] = useState("");
-
-  useEffect(() => {
-    fetchReservations();
-  }, [dateFilter]);
-
-  const fetchReservations = async () => {
-    setLoading(true);
-    const { data } = await adminApi.getAllReservations(dateFilter || undefined);
-    if (data) setReservations(data);
-    setLoading(false);
-  };
+  const { data: reservations = [], isLoading: loading } = useAdminReservations(dateFilter || undefined);
+  const updateStatusMutation = useUpdateReservationStatus();
 
   const handleStatusUpdate = async (id: string, status: string) => {
-    const { error } = await adminApi.updateReservationStatus(id, status);
-    if (error) {
-      toast.error("Failed to update status");
-      return;
-    }
-    toast.success("Status updated");
-    fetchReservations();
+    updateStatusMutation.mutate({ id, status });
   };
 
   const statuses = ["PENDING", "CONFIRMED", "CANCELLED", "COMPLETED", "NO_SHOW"];
@@ -934,33 +968,109 @@ function ReservationsManagement() {
 }
 
 function UsersManagement() {
-  const [users, setUsers] = useState<AdminUser[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: users = [], isLoading: loading } = useAdminUsers();
+  const createRiderMutation = useCreateRider();
+  const deleteUserMutation = useDeleteUser();
+  const [showRiderForm, setShowRiderForm] = useState(false);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [riderForm, setRiderForm] = useState({
+    email: "",
+    password: "",
+    fullName: "",
+    phone: "",
+    vehicleType: "Motorcycle",
+    licensePlate: "",
+  });
 
-  useEffect(() => {
-    fetchUsers();
-  }, []);
-
-  const fetchUsers = async () => {
-    setLoading(true);
-    const { data } = await adminApi.getAllUsers();
-    if (data) setUsers(data);
-    setLoading(false);
-  };
-
-  const handleToggleActive = async (id: string, active: boolean) => {
-    const { error } = await adminApi.toggleUserActive(id, active);
-    if (error) {
-      toast.error("Failed to update user");
+  const handleCreateRider = async () => {
+    if (!riderForm.email || !riderForm.password || !riderForm.fullName || !riderForm.licensePlate) {
       return;
     }
-    toast.success(active ? "User activated" : "User deactivated");
-    fetchUsers();
+    createRiderMutation.mutate(riderForm, {
+      onSuccess: () => {
+        setShowRiderForm(false);
+        setRiderForm({ email: "", password: "", fullName: "", phone: "", vehicleType: "Motorcycle", licensePlate: "" });
+      },
+    });
+  };
+
+  const getRoleColor = (role: string) => {
+    switch (role) {
+      case 'ADMIN': return 'bg-purple-500/10 text-purple-500';
+      case 'RIDER': return 'bg-blue-500/10 text-blue-500';
+      default: return 'bg-muted text-muted-foreground';
+    }
   };
 
   return (
     <div>
-      <h2 className="text-xl mb-4" style={{ fontFamily: "'DM Serif Display', serif" }}>Users Management</h2>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-xl" style={{ fontFamily: "'DM Serif Display', serif" }}>Users Management</h2>
+        <Button size="sm" onClick={() => setShowRiderForm(true)}>
+          <Plus className="h-3.5 w-3.5 mr-1" /> Add Rider
+        </Button>
+      </div>
+
+      {/* Create Rider Form */}
+      {showRiderForm && (
+        <div className="mb-6 p-4 rounded-xl border border-border bg-card space-y-3">
+          <h3 className="text-sm font-bold">Create New Rider</h3>
+          <div className="grid grid-cols-2 gap-3">
+            <Input
+              placeholder="Full Name *"
+              value={riderForm.fullName}
+              onChange={(e) => setRiderForm({ ...riderForm, fullName: e.target.value })}
+              maxLength={100}
+            />
+            <Input
+              placeholder="Email *"
+              type="email"
+              value={riderForm.email}
+              onChange={(e) => setRiderForm({ ...riderForm, email: e.target.value })}
+              maxLength={100}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <Input
+              placeholder="Password *"
+              type="password"
+              value={riderForm.password}
+              onChange={(e) => setRiderForm({ ...riderForm, password: e.target.value })}
+              maxLength={100}
+            />
+            <Input
+              placeholder="Phone"
+              value={riderForm.phone}
+              onChange={(e) => setRiderForm({ ...riderForm, phone: e.target.value })}
+              maxLength={20}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <select
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              value={riderForm.vehicleType}
+              onChange={(e) => setRiderForm({ ...riderForm, vehicleType: e.target.value })}
+            >
+              <option value="Motorcycle">Motorcycle</option>
+              <option value="E-Bike">E-Bike</option>
+              <option value="Bicycle">Bicycle</option>
+              <option value="Car">Car</option>
+            </select>
+            <Input
+              placeholder="License Plate *"
+              value={riderForm.licensePlate}
+              onChange={(e) => setRiderForm({ ...riderForm, licensePlate: e.target.value })}
+              maxLength={20}
+            />
+          </div>
+          <div className="flex gap-2 justify-end">
+            <Button variant="outline" size="sm" onClick={() => setShowRiderForm(false)}>Cancel</Button>
+            <Button size="sm" onClick={handleCreateRider} disabled={createRiderMutation.isPending}>
+              {createRiderMutation.isPending ? "Creating..." : "Create Rider"}
+            </Button>
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <div className="flex justify-center py-12">
@@ -973,26 +1083,57 @@ function UsersManagement() {
               <div>
                 <div className="flex items-center gap-2">
                   <span className="font-bold text-sm">{user.fullName || "No name"}</span>
-                  <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${
-                    user.role === 'ADMIN' ? 'bg-purple-500/10 text-purple-500' : 'bg-muted text-muted-foreground'
-                  }`}>
+                  <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${getRoleColor(user.role)}`}>
                     {user.role}
                   </span>
-                  {!user.isActive && (
-                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-destructive/10 text-destructive font-bold">Inactive</span>
-                  )}
+                  <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${
+                    user.emailVerified ? 'bg-green-500/10 text-green-500' : 'bg-yellow-500/10 text-yellow-500'
+                  }`}>
+                    {user.emailVerified ? 'Verified' : 'Unverified'}
+                  </span>
                 </div>
                 <span className="text-xs text-muted-foreground">{user.email}</span>
               </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleToggleActive(user.id, !user.isActive)}
-              >
-                {user.isActive ? "Deactivate" : "Activate"}
-              </Button>
+              {user.role !== 'ADMIN' && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setDeleteConfirmId(user.id)}
+                  className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              )}
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirmId && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-card rounded-xl border border-border p-6 w-full max-w-sm">
+            <h3 className="text-lg font-bold mb-2" style={{ fontFamily: "'DM Serif Display', serif" }}>
+              Delete User
+            </h3>
+            <p className="text-sm text-muted-foreground mb-4">
+              Are you sure you want to delete this user? This action cannot be undone.
+            </p>
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => setDeleteConfirmId(null)}>
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={() => {
+                  deleteUserMutation.mutate(deleteConfirmId);
+                  setDeleteConfirmId(null);
+                }}
+              >
+                Delete
+              </Button>
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -1000,41 +1141,32 @@ function UsersManagement() {
 }
 
 function ReviewsManagement() {
-  const [reviews, setReviews] = useState<Review[]>([]);
-  const [stats, setStats] = useState<ReviewStats | null>(null);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+  const { data: reviewData, isLoading: loading } = useAdminReviews();
+  const respondMutation = useRespondToReview();
   const [respondingTo, setRespondingTo] = useState<number | null>(null);
   const [responseText, setResponseText] = useState("");
 
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  const fetchData = async () => {
-    setLoading(true);
-    const [reviewsRes, statsRes] = await Promise.all([
-      adminReviewsApi.getAllReviews(),
-      adminReviewsApi.getReviewStats(),
-    ]);
-    if (reviewsRes.data) setReviews(reviewsRes.data);
-    if (statsRes.data) setStats(statsRes.data);
-    setLoading(false);
-  };
+  const reviews = reviewData?.reviews || [];
+  const stats = reviewData?.stats || null;
 
   const handleRespond = async (reviewId: number) => {
     if (!responseText.trim()) {
-      toast.error("Please enter a response");
       return;
     }
-    const { error } = await adminReviewsApi.respondToReview(reviewId, responseText);
-    if (error) {
-      toast.error("Failed to submit response");
-      return;
-    }
-    toast.success("Response submitted");
-    setRespondingTo(null);
-    setResponseText("");
-    fetchData();
+    respondMutation.mutate(
+      { reviewId, response: responseText },
+      {
+        onSuccess: () => {
+          setRespondingTo(null);
+          setResponseText("");
+        },
+      }
+    );
+  };
+
+  const refreshData = () => {
+    queryClient.invalidateQueries({ queryKey: ["admin", "reviews"] });
   };
 
   const renderStars = (rating: number) => {
@@ -1050,7 +1182,7 @@ function ReviewsManagement() {
     <div>
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-xl" style={{ fontFamily: "'DM Serif Display', serif" }}>Reviews Management</h2>
-        <Button variant="outline" size="sm" onClick={fetchData}>
+        <Button variant="outline" size="sm" onClick={refreshData}>
           <RefreshCw className="h-3.5 w-3.5 mr-1" /> Refresh
         </Button>
       </div>
@@ -1171,8 +1303,11 @@ function ReviewsManagement() {
 }
 
 function AnnouncementsManagement() {
-  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: announcements = [], isLoading: loading } = useAdminAnnouncements();
+  const createMutation = useCreateAnnouncement();
+  const updateMutation = useUpdateAnnouncement();
+  const deleteMutation = useDeleteAnnouncement();
+
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [formData, setFormData] = useState({
@@ -1183,20 +1318,8 @@ function AnnouncementsManagement() {
     endDate: "",
   });
 
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  const fetchData = async () => {
-    setLoading(true);
-    const { data } = await adminAnnouncementsApi.getAll();
-    if (data) setAnnouncements(data);
-    setLoading(false);
-  };
-
   const handleSubmit = async () => {
     if (!formData.title || !formData.content) {
-      toast.error("Title and content are required");
       return;
     }
 
@@ -1209,32 +1332,18 @@ function AnnouncementsManagement() {
     };
 
     if (editingId) {
-      const { error } = await adminAnnouncementsApi.update(editingId, payload);
-      if (error) {
-        toast.error("Failed to update announcement");
-        return;
-      }
-      toast.success("Announcement updated");
+      updateMutation.mutate({ id: editingId, data: payload }, {
+        onSuccess: () => resetForm(),
+      });
     } else {
-      const { error } = await adminAnnouncementsApi.create(payload);
-      if (error) {
-        toast.error("Failed to create announcement");
-        return;
-      }
-      toast.success("Announcement created");
+      createMutation.mutate(payload, {
+        onSuccess: () => resetForm(),
+      });
     }
-    resetForm();
-    fetchData();
   };
 
   const handleDelete = async (id: number) => {
-    const { error } = await adminAnnouncementsApi.delete(id);
-    if (error) {
-      toast.error("Failed to delete announcement");
-      return;
-    }
-    toast.success("Announcement deleted");
-    fetchData();
+    deleteMutation.mutate(id);
   };
 
   const handleEdit = (announcement: Announcement) => {
@@ -1250,15 +1359,10 @@ function AnnouncementsManagement() {
   };
 
   const handleToggleActive = async (announcement: Announcement) => {
-    const { error } = await adminAnnouncementsApi.update(announcement.id, {
-      isActive: !announcement.isActive,
+    updateMutation.mutate({
+      id: announcement.id,
+      data: { isActive: !announcement.isActive },
     });
-    if (error) {
-      toast.error("Failed to update announcement");
-      return;
-    }
-    toast.success(announcement.isActive ? "Announcement deactivated" : "Announcement activated");
-    fetchData();
   };
 
   const resetForm = () => {
@@ -1375,6 +1479,244 @@ function AnnouncementsManagement() {
   );
 }
 
+const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+function ScheduleManagement() {
+  const [closedDates, setClosedDates] = useState<ClosedDate[]>([]);
+  const [recurringClosures, setRecurringClosures] = useState<RecurringClosure[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [newClosedDate, setNewClosedDate] = useState('');
+  const [newClosedReason, setNewClosedReason] = useState('');
+  const [newRecurringDay, setNewRecurringDay] = useState<number | ''>('');
+  const [newRecurringReason, setNewRecurringReason] = useState('');
+
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const [closedRes, recurringRes] = await Promise.all([
+        adminApi.getClosedDates(),
+        adminApi.getRecurringClosures(),
+      ]);
+      if (closedRes.data) setClosedDates(closedRes.data);
+      if (recurringRes.data) setRecurringClosures(recurringRes.data);
+    } catch (error) {
+      toast.error('Failed to load schedule data');
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const handleAddClosedDate = async () => {
+    if (!newClosedDate) {
+      toast.error('Please select a date');
+      return;
+    }
+    const { data, error } = await adminApi.addClosedDate(newClosedDate, newClosedReason || undefined);
+    if (error) {
+      toast.error(error);
+      return;
+    }
+    if (data) {
+      setClosedDates([...closedDates, data]);
+      setNewClosedDate('');
+      setNewClosedReason('');
+      toast.success('Closed date added');
+    }
+  };
+
+  const handleDeleteClosedDate = async (id: number) => {
+    const { error } = await adminApi.deleteClosedDate(id);
+    if (error) {
+      toast.error(error);
+      return;
+    }
+    setClosedDates(closedDates.filter(d => d.id !== id));
+    toast.success('Closed date removed');
+  };
+
+  const handleAddRecurringClosure = async () => {
+    if (newRecurringDay === '') {
+      toast.error('Please select a day');
+      return;
+    }
+    const { data, error } = await adminApi.addRecurringClosure(newRecurringDay, newRecurringReason || undefined);
+    if (error) {
+      toast.error(error);
+      return;
+    }
+    if (data) {
+      setRecurringClosures([...recurringClosures, data]);
+      setNewRecurringDay('');
+      setNewRecurringReason('');
+      toast.success('Recurring closure added');
+    }
+  };
+
+  const handleDeleteRecurringClosure = async (id: number) => {
+    const { error } = await adminApi.deleteRecurringClosure(id);
+    if (error) {
+      toast.error(error);
+      return;
+    }
+    setRecurringClosures(recurringClosures.filter(r => r.id !== id));
+    toast.success('Recurring closure removed');
+  };
+
+  const handleToggleRecurringClosure = async (id: number) => {
+    const { data, error } = await adminApi.toggleRecurringClosure(id);
+    if (error) {
+      toast.error(error);
+      return;
+    }
+    if (data) {
+      setRecurringClosures(recurringClosures.map(r => r.id === id ? data : r));
+      toast.success(data.isActive ? 'Closure activated' : 'Closure deactivated');
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex justify-center py-12">
+        <div className="h-6 w-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-8">
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl" style={{ fontFamily: "'DM Serif Display', serif" }}>Schedule Management</h2>
+        <Button variant="outline" size="sm" onClick={fetchData}>
+          <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+          Refresh
+        </Button>
+      </div>
+
+      {/* Recurring Closures Section */}
+      <div className="p-4 rounded-xl border border-border bg-card">
+        <h3 className="text-sm font-bold mb-4">Recurring Closures</h3>
+        <p className="text-xs text-muted-foreground mb-4">Set days when the cafe is regularly closed (e.g., every Sunday)</p>
+
+        <div className="flex flex-col sm:flex-row gap-2 mb-4">
+          <select
+            value={newRecurringDay}
+            onChange={(e) => setNewRecurringDay(e.target.value === '' ? '' : parseInt(e.target.value))}
+            className="flex-1 h-9 rounded-md border border-input bg-background px-3 text-sm"
+          >
+            <option value="">Select day...</option>
+            {DAY_NAMES.map((day, idx) => (
+              <option key={idx} value={idx}>{day}</option>
+            ))}
+          </select>
+          <Input
+            placeholder="Reason (optional)"
+            value={newRecurringReason}
+            onChange={(e) => setNewRecurringReason(e.target.value)}
+            className="flex-1"
+          />
+          <Button onClick={handleAddRecurringClosure} size="sm">
+            <Plus className="h-3.5 w-3.5 mr-1" />
+            Add
+          </Button>
+        </div>
+
+        {recurringClosures.length === 0 ? (
+          <p className="text-sm text-muted-foreground text-center py-4">No recurring closures set</p>
+        ) : (
+          <div className="space-y-2">
+            {recurringClosures.map((closure) => (
+              <div
+                key={closure.id}
+                className={`flex items-center justify-between p-3 rounded-lg border ${
+                  closure.isActive ? 'border-destructive/30 bg-destructive/5' : 'border-border bg-muted/50'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => handleToggleRecurringClosure(closure.id)}
+                    className={`w-10 h-5 rounded-full transition-colors ${
+                      closure.isActive ? 'bg-destructive' : 'bg-muted-foreground/30'
+                    }`}
+                  >
+                    <div
+                      className={`w-4 h-4 rounded-full bg-white shadow transition-transform ${
+                        closure.isActive ? 'translate-x-5' : 'translate-x-0.5'
+                      }`}
+                    />
+                  </button>
+                  <div>
+                    <span className="font-medium">{DAY_NAMES[closure.dayOfWeek]}</span>
+                    {closure.reason && (
+                      <span className="text-xs text-muted-foreground ml-2">({closure.reason})</span>
+                    )}
+                  </div>
+                </div>
+                <Button variant="ghost" size="sm" onClick={() => handleDeleteRecurringClosure(closure.id)}>
+                  <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Specific Closed Dates Section */}
+      <div className="p-4 rounded-xl border border-border bg-card">
+        <h3 className="text-sm font-bold mb-4">Specific Closed Dates</h3>
+        <p className="text-xs text-muted-foreground mb-4">Mark specific dates when the cafe will be closed (holidays, maintenance, etc.)</p>
+
+        <div className="flex flex-col sm:flex-row gap-2 mb-4">
+          <Input
+            type="date"
+            value={newClosedDate}
+            onChange={(e) => setNewClosedDate(e.target.value)}
+            min={new Date().toISOString().split('T')[0]}
+            className="flex-1"
+          />
+          <Input
+            placeholder="Reason (optional)"
+            value={newClosedReason}
+            onChange={(e) => setNewClosedReason(e.target.value)}
+            className="flex-1"
+          />
+          <Button onClick={handleAddClosedDate} size="sm">
+            <Plus className="h-3.5 w-3.5 mr-1" />
+            Add
+          </Button>
+        </div>
+
+        {closedDates.length === 0 ? (
+          <p className="text-sm text-muted-foreground text-center py-4">No specific closed dates set</p>
+        ) : (
+          <div className="space-y-2">
+            {closedDates.map((closedDate) => (
+              <div
+                key={closedDate.id}
+                className="flex items-center justify-between p-3 rounded-lg border border-destructive/30 bg-destructive/5"
+              >
+                <div>
+                  <span className="font-medium">
+                    {format(new Date(closedDate.date), 'EEEE, MMMM d, yyyy')}
+                  </span>
+                  {closedDate.reason && (
+                    <span className="text-xs text-muted-foreground ml-2">({closedDate.reason})</span>
+                  )}
+                </div>
+                <Button variant="ghost" size="sm" onClick={() => handleDeleteClosedDate(closedDate.id)}>
+                  <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function Admin() {
   const { user, logout } = useAuth();
 
@@ -1419,6 +1761,7 @@ export default function Admin() {
             <Route path="/menu" element={<MenuManagement />} />
             <Route path="/orders" element={<OrdersManagement />} />
             <Route path="/reservations" element={<ReservationsManagement />} />
+            <Route path="/schedule" element={<ScheduleManagement />} />
             <Route path="/users" element={<UsersManagement />} />
             <Route path="/reviews" element={<ReviewsManagement />} />
             <Route path="/announcements" element={<AnnouncementsManagement />} />

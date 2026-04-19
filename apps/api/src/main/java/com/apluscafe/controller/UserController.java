@@ -113,6 +113,8 @@ public class UserController {
                 .addressLine(request.getStreet())
                 .city(request.getCity())
                 .postalCode(request.getPostalCode())
+                .latitude(request.getLat())
+                .longitude(request.getLng())
                 .isDefault(Boolean.TRUE.equals(request.getIsDefault()))
                 .build();
 
@@ -154,6 +156,8 @@ public class UserController {
         address.setAddressLine(request.getStreet());
         address.setCity(request.getCity());
         address.setPostalCode(request.getPostalCode());
+        address.setLatitude(request.getLat());
+        address.setLongitude(request.getLng());
         address.setIsDefault(Boolean.TRUE.equals(request.getIsDefault()));
 
         address = addressRepository.save(address);
@@ -289,14 +293,16 @@ public class UserController {
         @NotBlank(message = "Label is required")
         private String label;
 
-        @NotBlank(message = "Street is required")
+        @NotBlank(message = "Address is required")
         private String street;
 
-        @NotBlank(message = "City is required")
         private String city;
 
-        @NotBlank(message = "Postal code is required")
         private String postalCode;
+
+        private Double lat;
+
+        private Double lng;
 
         private Boolean isDefault;
     }
@@ -333,6 +339,8 @@ public class UserController {
         private String street;
         private String city;
         private String postalCode;
+        private Double lat;
+        private Double lng;
         private Boolean isDefault;
 
         public static AddressResponse fromEntity(Address address) {
@@ -342,6 +350,8 @@ public class UserController {
                     .street(address.getAddressLine())
                     .city(address.getCity())
                     .postalCode(address.getPostalCode())
+                    .lat(address.getLatitude())
+                    .lng(address.getLongitude())
                     .isDefault(address.getIsDefault())
                     .build();
         }

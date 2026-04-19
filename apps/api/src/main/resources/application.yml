@@ -70,6 +70,13 @@ stripe:
   secret-key: ${STRIPE_SECRET_KEY}
   webhook-secret: ${STRIPE_WEBHOOK_SECRET}
 
+# Cloudinary Configuration (for production image uploads)
+# Get credentials from https://cloudinary.com/console
+cloudinary:
+  cloud-name: ${CLOUDINARY_CLOUD_NAME:}
+  api-key: ${CLOUDINARY_API_KEY:}
+  api-secret: ${CLOUDINARY_API_SECRET:}
+
 # App Configuration
 app:
   frontend-url: ${FRONTEND_URL:http://localhost:5173}

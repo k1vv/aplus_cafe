@@ -13,14 +13,6 @@ INSERT INTO categories (name, description, display_order)
 SELECT 'Pastry', 'Fresh baked goods and pastries', 2
 WHERE NOT EXISTS (SELECT 1 FROM categories WHERE name = 'Pastry');
 
-INSERT INTO categories (name, description, display_order)
-SELECT 'Food', 'Main dishes and meals', 3
-WHERE NOT EXISTS (SELECT 1 FROM categories WHERE name = 'Food');
-
-INSERT INTO categories (name, description, display_order)
-SELECT 'Drinks', 'Non-coffee beverages', 4
-WHERE NOT EXISTS (SELECT 1 FROM categories WHERE name = 'Drinks');
-
 -- Insert menu items - Coffee (category_id = 1)
 INSERT INTO menu (category_id, name, description, price, image_url, is_available)
 SELECT 1, 'Café Latte', 'Smooth espresso with steamed milk and a layer of foam', 6.50, '/images/cafe-latte.jpg', true
@@ -107,3 +99,78 @@ INSERT INTO rider_details (user_id, vehicle_type, license_plate, is_available, c
 SELECT id, 'E-Bike', 'SIM-BOT', true, 2.9772, 101.731, 5.0, 999
 FROM users WHERE email = 'simbot.rider@apluscafe.com'
 AND NOT EXISTS (SELECT 1 FROM rider_details rd JOIN users u ON rd.user_id = u.id WHERE u.email = 'simbot.rider@apluscafe.com');
+
+-- ============================================
+-- CAFE TABLES (Matching Floor Plan Layout)
+-- ============================================
+-- Note: Column names from Hibernate naming strategy:
+-- table_number, floor_section, is_active (snake_case)
+-- positionx, positiony (lowercase concatenated)
+
+-- Window section (circular tables, 2 seats each)
+INSERT INTO cafe_tables (table_number, capacity, positionx, positiony, width, height, floor_section, shape, is_active)
+SELECT 'W1', 2, 55, 90, 60, 60, 'window', 'ROUND', true
+WHERE NOT EXISTS (SELECT 1 FROM cafe_tables WHERE table_number = 'W1');
+
+INSERT INTO cafe_tables (table_number, capacity, positionx, positiony, width, height, floor_section, shape, is_active)
+SELECT 'W2', 2, 55, 190, 60, 60, 'window', 'ROUND', true
+WHERE NOT EXISTS (SELECT 1 FROM cafe_tables WHERE table_number = 'W2');
+
+INSERT INTO cafe_tables (table_number, capacity, positionx, positiony, width, height, floor_section, shape, is_active)
+SELECT 'W3', 2, 55, 290, 60, 60, 'window', 'ROUND', true
+WHERE NOT EXISTS (SELECT 1 FROM cafe_tables WHERE table_number = 'W3');
+
+INSERT INTO cafe_tables (table_number, capacity, positionx, positiony, width, height, floor_section, shape, is_active)
+SELECT 'W4', 2, 55, 390, 60, 60, 'window', 'ROUND', true
+WHERE NOT EXISTS (SELECT 1 FROM cafe_tables WHERE table_number = 'W4');
+
+-- Main dining / Center section (rectangular tables, 4 seats each)
+INSERT INTO cafe_tables (table_number, capacity, positionx, positiony, width, height, floor_section, shape, is_active)
+SELECT 'C1', 4, 190, 110, 100, 70, 'center', 'RECTANGULAR', true
+WHERE NOT EXISTS (SELECT 1 FROM cafe_tables WHERE table_number = 'C1');
+
+INSERT INTO cafe_tables (table_number, capacity, positionx, positiony, width, height, floor_section, shape, is_active)
+SELECT 'C2', 4, 190, 230, 100, 70, 'center', 'RECTANGULAR', true
+WHERE NOT EXISTS (SELECT 1 FROM cafe_tables WHERE table_number = 'C2');
+
+INSERT INTO cafe_tables (table_number, capacity, positionx, positiony, width, height, floor_section, shape, is_active)
+SELECT 'C3', 4, 190, 350, 100, 70, 'center', 'RECTANGULAR', true
+WHERE NOT EXISTS (SELECT 1 FROM cafe_tables WHERE table_number = 'C3');
+
+INSERT INTO cafe_tables (table_number, capacity, positionx, positiony, width, height, floor_section, shape, is_active)
+SELECT 'C4', 4, 350, 110, 100, 70, 'center', 'RECTANGULAR', true
+WHERE NOT EXISTS (SELECT 1 FROM cafe_tables WHERE table_number = 'C4');
+
+INSERT INTO cafe_tables (table_number, capacity, positionx, positiony, width, height, floor_section, shape, is_active)
+SELECT 'C5', 4, 350, 230, 100, 70, 'center', 'RECTANGULAR', true
+WHERE NOT EXISTS (SELECT 1 FROM cafe_tables WHERE table_number = 'C5');
+
+INSERT INTO cafe_tables (table_number, capacity, positionx, positiony, width, height, floor_section, shape, is_active)
+SELECT 'C6', 4, 350, 350, 100, 70, 'center', 'RECTANGULAR', true
+WHERE NOT EXISTS (SELECT 1 FROM cafe_tables WHERE table_number = 'C6');
+
+-- Group area / Corner section (oval tables for larger groups)
+INSERT INTO cafe_tables (table_number, capacity, positionx, positiony, width, height, floor_section, shape, is_active)
+SELECT 'L1', 6, 510, 160, 120, 80, 'corner', 'RECTANGULAR', true
+WHERE NOT EXISTS (SELECT 1 FROM cafe_tables WHERE table_number = 'L1');
+
+INSERT INTO cafe_tables (table_number, capacity, positionx, positiony, width, height, floor_section, shape, is_active)
+SELECT 'L2', 6, 510, 270, 120, 80, 'corner', 'RECTANGULAR', true
+WHERE NOT EXISTS (SELECT 1 FROM cafe_tables WHERE table_number = 'L2');
+
+INSERT INTO cafe_tables (table_number, capacity, positionx, positiony, width, height, floor_section, shape, is_active)
+SELECT 'L3', 8, 510, 380, 120, 80, 'corner', 'RECTANGULAR', true
+WHERE NOT EXISTS (SELECT 1 FROM cafe_tables WHERE table_number = 'L3');
+
+-- Outdoor patio section (rectangular tables, 4 seats each)
+INSERT INTO cafe_tables (table_number, capacity, positionx, positiony, width, height, floor_section, shape, is_active)
+SELECT 'O1', 4, 135, 520, 80, 60, 'outdoor', 'RECTANGULAR', true
+WHERE NOT EXISTS (SELECT 1 FROM cafe_tables WHERE table_number = 'O1');
+
+INSERT INTO cafe_tables (table_number, capacity, positionx, positiony, width, height, floor_section, shape, is_active)
+SELECT 'O2', 4, 255, 520, 80, 60, 'outdoor', 'RECTANGULAR', true
+WHERE NOT EXISTS (SELECT 1 FROM cafe_tables WHERE table_number = 'O2');
+
+INSERT INTO cafe_tables (table_number, capacity, positionx, positiony, width, height, floor_section, shape, is_active)
+SELECT 'O3', 4, 375, 520, 80, 60, 'outdoor', 'RECTANGULAR', true
+WHERE NOT EXISTS (SELECT 1 FROM cafe_tables WHERE table_number = 'O3');

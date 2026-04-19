@@ -26,14 +26,21 @@ public class CafeTable {
     @Column(nullable = false)
     private Integer capacity;
 
-    // Position for layout visualization (percentage or pixels)
+    // Position for layout visualization (pixels)
     @Column(nullable = false)
     private Double positionX;
 
     @Column(nullable = false)
     private Double positionY;
 
-    private String floorSection; // e.g., "indoor", "outdoor", "upstairs"
+    // Dimensions for layout visualization (pixels)
+    @Column(nullable = false)
+    private Double width = 60.0;
+
+    @Column(nullable = false)
+    private Double height = 60.0;
+
+    private String floorSection; // e.g., "window", "center", "corner", "outdoor"
 
     @Enumerated(EnumType.STRING)
     private TableShape shape = TableShape.SQUARE;
